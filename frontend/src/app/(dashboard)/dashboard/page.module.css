@@ -1,0 +1,242 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* ── Header ──────────────────────────────────────────────── */
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  margin-bottom: 0.35rem;
+}
+
+.subtitle {
+  color: #94a3b8;
+  font-size: 0.95rem;
+}
+
+.generateBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.65rem 1.25rem;
+  background: var(--primary);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.generateBtn:hover {
+  background: var(--primary-hover);
+  transform: translateY(-1px);
+}
+
+/* ── CV List (table-style) ───────────────────────────────── */
+
+.cvList {
+  display: flex;
+  flex-direction: column;
+}
+
+.tableHeader {
+  display: grid;
+  grid-template-columns: 2fr 1.2fr 0.8fr 1fr 60px;
+  gap: 1rem;
+  padding: 0.75rem 1.25rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.cvRow {
+  display: grid;
+  grid-template-columns: 2fr 1.2fr 0.8fr 1fr 60px;
+  gap: 1rem;
+  align-items: center;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  transition: background 0.15s;
+}
+
+.cvRow:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.cvRow:last-child {
+  border-bottom: none;
+}
+
+.colRole {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-weight: 500;
+  color: #f8fafc;
+  font-size: 0.95rem;
+}
+
+.rowIcon {
+  color: var(--primary);
+  flex-shrink: 0;
+}
+
+.colCompany {
+  color: #94a3b8;
+  font-size: 0.9rem;
+}
+
+.colAts {
+  font-size: 0.9rem;
+}
+
+.colDate {
+  color: #64748b;
+  font-size: 0.85rem;
+}
+
+.colActions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* ── ATS Badge ───────────────────────────────────────────── */
+
+.atsBadge {
+  display: inline-flex;
+  padding: 0.2rem 0.6rem;
+  border-radius: 99px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.atsBadge[data-score="high"] {
+  background: rgba(16, 185, 129, 0.12);
+  color: #34d399;
+}
+
+.atsBadge[data-score="mid"] {
+  background: rgba(250, 204, 21, 0.12);
+  color: #facc15;
+}
+
+.atsBadge[data-score="low"] {
+  background: rgba(239, 68, 68, 0.12);
+  color: #f87171;
+}
+
+/* ── Download button ─────────────────────────────────────── */
+
+.downloadBtn {
+  padding: 0.4rem;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  color: #94a3b8;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.downloadBtn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #f8fafc;
+}
+
+/* ── Empty State ─────────────────────────────────────────── */
+
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 5rem 2rem;
+  border: 1px dashed rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius);
+  background: rgba(15, 23, 42, 0.3);
+}
+
+.emptyIcon {
+  color: #475569;
+  margin-bottom: 1.25rem;
+}
+
+.emptyTitle {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: #e2e8f0;
+  margin-bottom: 0.5rem;
+}
+
+.emptyDesc {
+  font-size: 0.9rem;
+  color: #94a3b8;
+  max-width: 400px;
+  margin-bottom: 1.5rem;
+  line-height: 1.5;
+}
+
+.emptyBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  background: var(--primary);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.emptyBtn:hover {
+  background: var(--primary-hover);
+  transform: translateY(-2px);
+}
+
+/* ── Loading ─────────────────────────────────────────────── */
+
+.loadingState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem;
+  color: #94a3b8;
+  gap: 1rem;
+}
+
+.spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid rgba(99, 102, 241, 0.3);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
