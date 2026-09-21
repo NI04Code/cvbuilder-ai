@@ -1,5 +1,5 @@
 """
-JobSeek AI — FastAPI Application Entry Point.
+CVBuilder AI — FastAPI Application Entry Point.
 
 Configures middleware (CORS, rate limiting, security headers),
 mounts API routes, and exposes the application instance.
@@ -30,7 +30,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 
 app = FastAPI(
-    title="JobSeek AI API",
+    title="CVBuilder AI API",
     description="AI-powered ATS CV generation from your resume and job descriptions.",
     version="0.1.0",
     lifespan=lifespan,
@@ -74,7 +74,7 @@ app.include_router(api_router, prefix="/api")
 @app.get("/health", tags=["System"])
 async def health_check():
     """Simple health check endpoint."""
-    return {"status": "healthy", "service": "jobseek-ai-api"}
+    return {"status": "healthy", "service": "cvbuilder-ai-api"}
 
 
 # ── Global Exception Handler ─────────────────────────────────────────────

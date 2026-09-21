@@ -37,7 +37,7 @@ function LoginContent() {
         <div className={styles.logo}>
           <FileText size={40} className={styles.logoIcon} />
           <h1 className={styles.logoText}>
-            JobSeek <span className="gradient-text">AI</span>
+            CVBuilder <span className="gradient-text">AI</span>
           </h1>
         </div>
 

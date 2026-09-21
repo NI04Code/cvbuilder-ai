@@ -1,1 +1,1 @@
-"""JobSeek AI backend application package."""
+"""CVBuilder AI backend application package."""

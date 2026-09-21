@@ -6,7 +6,7 @@ import { Providers } from "@/components/Providers";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "JobSeek AI - ATS CV Generator",
+  title: "CVBuilder AI - ATS CV Generator",
   description: "Generate personalized, ATS-optimized CVs from your resume and target job descriptions using AI.",
 };
 

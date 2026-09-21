@@ -1,0 +1,582 @@
+.container {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Shared Nav (matches landing page) ─────────────────────────────────── */
+
+.nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem 5%;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.navLinks {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.logoIcon {
+  color: var(--primary);
+}
+
+.navLink {
+  padding: 0.5rem 1.25rem;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  font-weight: 500;
+  font-size: 0.875rem;
+  transition: all 0.2s;
+}
+
+.navLink:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* ── Main Content ──────────────────────────────────────────────────────── */
+
+.main {
+  flex: 1;
+  padding: 3rem 5%;
+  max-width: 1100px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 3rem;
+}
+
+.title {
+  font-size: clamp(2rem, 5vw, 3rem);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  margin-bottom: 1rem;
+}
+
+.subtitle {
+  font-size: 1.125rem;
+  color: #94a3b8;
+  max-width: 600px;
+  margin: 0 auto;
+  line-height: 1.6;
+}
+
+/* ── Upload Zone ───────────────────────────────────────────────────────── */
+
+.uploadZone {
+  border: 2px dashed rgba(99, 102, 241, 0.3);
+  border-radius: var(--radius);
+  padding: 4rem 2rem;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s;
+  background: rgba(30, 41, 59, 0.4);
+}
+
+.uploadZone:hover {
+  border-color: rgba(99, 102, 241, 0.6);
+  background: rgba(30, 41, 59, 0.6);
+}
+
+.uploadZoneDragging {
+  border-color: var(--primary);
+  background: rgba(99, 102, 241, 0.08);
+  transform: scale(1.01);
+}
+
+.uploadIcon {
+  color: var(--primary);
+  margin-bottom: 1.5rem;
+  opacity: 0.8;
+}
+
+.uploadTitle {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.uploadDesc {
+  color: #94a3b8;
+  font-size: 0.875rem;
+}
+
+.uploadHint {
+  color: #64748b;
+  font-size: 0.75rem;
+  margin-top: 1rem;
+}
+
+/* ── Loading State ─────────────────────────────────────────────────────── */
+
+.loadingState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 5rem 2rem;
+  text-align: center;
+}
+
+.spinner {
+  width: 48px;
+  height: 48px;
+  border: 3px solid rgba(99, 102, 241, 0.2);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loadingText {
+  color: #94a3b8;
+  font-size: 1rem;
+}
+
+.loadingHint {
+  color: #64748b;
+  font-size: 0.875rem;
+}
+
+/* ── Error State ───────────────────────────────────────────────────────── */
+
+.errorMsg {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 1.5rem;
+  border-radius: var(--radius);
+  background: rgba(239, 68, 68, 0.1);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  margin-bottom: 2rem;
+  font-size: 0.875rem;
+}
+
+/* ── Results Container ─────────────────────────────────────────────────── */
+
+.results {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.resetBtn {
+  align-self: flex-start;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1.25rem;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #cbd5e1;
+  font-weight: 500;
+  font-size: 0.875rem;
+  transition: all 0.2s;
+}
+
+.resetBtn:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* ── Score Overview Card ───────────────────────────────────────────────── */
+
+.scoreOverview {
+  display: flex;
+  align-items: center;
+  gap: 3rem;
+  padding: 2.5rem;
+}
+
+.gaugeContainer {
+  position: relative;
+  width: 160px;
+  height: 160px;
+  flex-shrink: 0;
+}
+
+.gaugeSvg {
+  transform: rotate(-90deg);
+}
+
+.gaugeTrack {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.08);
+  stroke-width: 10;
+}
+
+.gaugeFill {
+  fill: none;
+  stroke-width: 10;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 1.2s ease-out, stroke 0.3s;
+}
+
+.gaugeScoreText {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+}
+
+.gaugeNumber {
+  font-size: 2.5rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.gaugeLabel {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-top: 0.25rem;
+}
+
+.overviewInfo {
+  flex: 1;
+}
+
+.overviewLevel {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border-radius: 99px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 1rem;
+  background: rgba(99, 102, 241, 0.15);
+  color: #a5b4fc;
+}
+
+.overviewSummary {
+  color: #cbd5e1;
+  line-height: 1.7;
+  font-size: 0.95rem;
+}
+
+/* ── Section Cards Grid ────────────────────────────────────────────────── */
+
+.sectionTitle {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.sectionTitleIcon {
+  color: var(--primary);
+}
+
+.sectionsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 1.25rem;
+}
+
+.sectionCard {
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.sectionCardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.sectionCardName {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.sectionCardScore {
+  font-weight: 700;
+  font-size: 1rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 6px;
+}
+
+.sectionCardScore[data-score="high"] {
+  background: rgba(52, 211, 153, 0.15);
+  color: #6ee7b7;
+}
+.sectionCardScore[data-score="mid"] {
+  background: rgba(251, 191, 36, 0.15);
+  color: #fbbf24;
+}
+.sectionCardScore[data-score="low"] {
+  background: rgba(248, 113, 113, 0.15);
+  color: #f87171;
+}
+
+.sectionCardWeight {
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.sectionCardFeedback {
+  color: #94a3b8;
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+
+.sectionCardSuggestions {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.sectionCardSuggestions li {
+  font-size: 0.8rem;
+  color: #a5b4fc;
+  padding-left: 1.25rem;
+  position: relative;
+}
+
+.sectionCardSuggestions li::before {
+  content: "→";
+  position: absolute;
+  left: 0;
+  color: var(--primary);
+}
+
+.sectionProgressBar {
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+
+.sectionProgressFill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 1s ease-out;
+}
+
+/* ── Keyword Analysis ──────────────────────────────────────────────────── */
+
+.keywordSection {
+  padding: 2rem;
+}
+
+.keywordColumns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+  margin-top: 1rem;
+}
+
+.keywordColumn h4 {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #94a3b8;
+  margin-bottom: 0.75rem;
+}
+
+.keywordTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.keywordTag {
+  padding: 0.3rem 0.75rem;
+  border-radius: 99px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.keywordTagPresent {
+  background: rgba(52, 211, 153, 0.12);
+  color: #6ee7b7;
+  border: 1px solid rgba(52, 211, 153, 0.2);
+}
+
+.keywordTagMissing {
+  background: rgba(251, 191, 36, 0.1);
+  color: #fbbf24;
+  border: 1px solid rgba(251, 191, 36, 0.15);
+}
+
+.densityBadge {
+  display: inline-block;
+  padding: 0.3rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-top: 1rem;
+}
+
+.densityBadge[data-rating="Strong"] {
+  background: rgba(52, 211, 153, 0.15);
+  color: #6ee7b7;
+}
+.densityBadge[data-rating="Adequate"] {
+  background: rgba(251, 191, 36, 0.15);
+  color: #fbbf24;
+}
+.densityBadge[data-rating="Low"] {
+  background: rgba(248, 113, 113, 0.15);
+  color: #f87171;
+}
+
+/* ── Formatting Issues ─────────────────────────────────────────────────── */
+
+.formattingSection {
+  padding: 2rem;
+}
+
+.issuesList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.issueItem {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  padding: 1rem;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.issueSeverity {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+}
+
+.issueSeverity[data-severity="High"] {
+  background: rgba(248, 113, 113, 0.15);
+  color: #f87171;
+}
+.issueSeverity[data-severity="Medium"] {
+  background: rgba(251, 191, 36, 0.15);
+  color: #fbbf24;
+}
+.issueSeverity[data-severity="Low"] {
+  background: rgba(99, 102, 241, 0.15);
+  color: #a5b4fc;
+}
+
+.issueContent p {
+  font-size: 0.875rem;
+  color: #cbd5e1;
+  margin-bottom: 0.25rem;
+}
+
+.issueContent span {
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+/* ── Strengths & Improvements ──────────────────────────────────────────── */
+
+.twoColumnCards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+}
+
+.listCard {
+  padding: 2rem;
+}
+
+.listCardTitle {
+  font-size: 1rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.listCardItems {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.listCardItems li {
+  font-size: 0.85rem;
+  color: #cbd5e1;
+  padding-left: 1.5rem;
+  position: relative;
+  line-height: 1.5;
+}
+
+.strengthItem::before {
+  content: "✓";
+  position: absolute;
+  left: 0;
+  color: #34d399;
+  font-weight: 700;
+}
+
+.improvementItem::before {
+  content: "!";
+  position: absolute;
+  left: 0.2rem;
+  color: #fbbf24;
+  font-weight: 700;
+}
+
+/* ── Responsive ────────────────────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+  .scoreOverview {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .keywordColumns,
+  .twoColumnCards {
+    grid-template-columns: 1fr;
+  }
+
+  .sectionsGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .resetBtn {
+    align-self: center;
+  }
+}

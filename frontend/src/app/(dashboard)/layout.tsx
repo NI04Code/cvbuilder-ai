@@ -24,7 +24,7 @@ export default async function DashboardLayout({
         <div className={styles.logo}>
           <FileText size={28} className={styles.logoIcon} />
           <span className={styles.logoText}>
-            JobSeek <span className="gradient-text">AI</span>
+            CVBuilder <span className="gradient-text">AI</span>
           </span>
         </div>
 

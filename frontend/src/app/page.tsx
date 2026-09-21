@@ -11,11 +11,16 @@ export default function Home() {
       <nav className={styles.nav}>
         <div className={styles.logo}>
           <FileText size={24} className={styles.logoIcon} />
-          JobSeek <span className="gradient-text">AI</span>
+          CVBuilder <span className="gradient-text">AI</span>
         </div>
-        <Link href="/login" className={styles.loginBtn}>
-          Sign In
-        </Link>
+        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+          <Link href="/ats-checker" className={styles.loginBtn} style={{ background: "rgba(99, 102, 241, 0.15)", color: "#a5b4fc" }}>
+            Free ATS Checker
+          </Link>
+          <Link href="/login" className={styles.loginBtn}>
+            Sign In
+          </Link>
+        </div>
       </nav>
 
       <main className={styles.hero}>
@@ -27,7 +32,7 @@ export default function Home() {
           transition={{ duration: 0.6 }}
           className={styles.badge}
         >
-          ✨ JobSeek AI 1.0 is live
+          ✨ CVBuilder AI 1.0 is live
         </motion.div>
         
         <motion.h1 

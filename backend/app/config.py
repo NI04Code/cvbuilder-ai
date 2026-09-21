@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     )
 
     # ── Database ──────────────────────────────────────────────────────────
-    database_url: str = "postgresql+asyncpg://jobseek:jobseek_secret@localhost:5433/jobseek_db"
+    database_url: str = "postgresql+asyncpg://cvbuilder:cvbuilder_secret@localhost:5433/cvbuilder_db"
 
     # ── JWT ───────────────────────────────────────────────────────────────
     jwt_secret_key: str = "CHANGE-ME-IN-PRODUCTION"
