@@ -7,7 +7,7 @@ ATSCheckResult with adaptive, career-level-aware scoring.
 import logging
 from typing import TypedDict
 
-import fitz  # PyMuPDF
+import pymupdf as fitz  # PyMuPDF
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.graph import END, StateGraph

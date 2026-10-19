@@ -92,7 +92,8 @@ backend/
 │   ├── config.py             # Pydantic Settings loaded from .env
 │   ├── database.py           # Async SQLAlchemy engine & session factory
 │   └── main.py               # Application entrypoint & middleware configuration
-├── requirements.txt          # Python dependencies
+├── pyproject.toml            # Project configuration & dependencies (uv)
+├── uv.lock                   # Deterministic lockfile
 └── .env.example              # Environment variables template
 ```
 
@@ -162,7 +163,8 @@ cp .env.example .env
 ## 4. Setup & Local Development
 
 ### Prerequisites
-- Python 3.11+
+- Python 3.14+ (or Python managed by `uv`)
+- `uv` (fast Python package manager)
 - PostgreSQL 16 (or Docker Compose running postgres)
 - Google Gemini API key
 - System libraries for WeasyPrint (Cairo, Pango, GDK-PixBuf):
@@ -174,7 +176,8 @@ cp .env.example .env
 
 1. **Create and Activate Virtual Environment**:
    ```bash
-   python -m venv .venv
+   # Create isolated virtualenv with Python 3.14
+   uv venv --python 3.14
    
    # Linux/macOS
    source .venv/bin/activate
@@ -183,9 +186,9 @@ cp .env.example .env
    .venv\Scripts\Activate.ps1
    ```
 
-2. **Install Dependencies**:
+2. **Install / Sync Dependencies**:
    ```bash
-   pip install -r requirements.txt
+   uv sync
    ```
 
 3. **Configure Environment Variables**:
@@ -196,12 +199,12 @@ cp .env.example .env
 
 4. **Run Database Migrations**:
    ```bash
-   alembic upgrade head
+   uv run alembic upgrade head
    ```
 
 5. **Start FastAPI Development Server**:
    ```bash
-   uvicorn app.main:app --reload --port 8000
+   uv run uvicorn app.main:app --reload --port 8000
    ```
 
 6. **Interactive API Documentation**:

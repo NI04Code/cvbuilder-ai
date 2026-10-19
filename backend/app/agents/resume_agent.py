@@ -1,7 +1,7 @@
 import logging
 from typing import TypedDict
 
-import fitz  # PyMuPDF
+import pymupdf as fitz  # PyMuPDF
 from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.graph import StateGraph, END
