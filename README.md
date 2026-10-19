@@ -18,7 +18,8 @@ cvbuilder-ai/
 ├── backend/               # FastAPI + LangGraph + WeasyPrint REST API
 │   ├── alembic/           # Database schema migrations
 │   ├── app/               # Application logic (agents, api, models, schemas, services)
-│   ├── requirements.txt   # Python dependencies
+│   ├── pyproject.toml     # Project configuration & dependencies (uv)
+│   ├── uv.lock            # Deterministic lockfile
 │   ├── .env.example       # Backend environment variables template
 │   └── README.md          # Backend system design & architecture documentation
 │
@@ -73,7 +74,8 @@ docker compose up -d
 
 2. Create and activate a Python virtual environment:
    ```bash
-   python -m venv .venv
+   # Create isolated virtualenv with Python 3.14
+   uv venv --python 3.14
    
    # Linux / macOS
    source .venv/bin/activate
@@ -82,9 +84,9 @@ docker compose up -d
    .venv\Scripts\Activate.ps1
    ```
 
-3. Install dependencies:
+3. Install / Sync dependencies:
    ```bash
-   pip install -r requirements.txt
+   uv sync
    ```
 
 4. Configure environment variables:
@@ -95,12 +97,12 @@ docker compose up -d
 
 5. Run database migrations:
    ```bash
-   alembic upgrade head
+   uv run alembic upgrade head
    ```
 
 6. Start the development server:
    ```bash
-   uvicorn app.main:app --reload --port 8000
+   uv run uvicorn app.main:app --reload --port 8000
    ```
 
 - API Documentation: [http://localhost:8000/docs](http://localhost:8000/docs)
