@@ -3,9 +3,9 @@ from typing import TypedDict
 
 import pymupdf as fitz  # PyMuPDF
 from langchain_core.messages import SystemMessage, HumanMessage
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.graph import StateGraph, END
 
+from app.agents.llm import get_structured_llm
 from app.config import settings
 from app.schemas.profile import ResumeProfile
 
@@ -38,18 +38,10 @@ def extract_text_node(state: ResumeState) -> ResumeState:
 
 
 def parse_with_llm_node(state: ResumeState) -> ResumeState:
-    """Parses the raw text into a structured profile using Gemini 2.0 Flash."""
-    logger.info("Parsing text with Gemini 2.0 Flash")
+    """Parses the raw text into a structured profile using Gemini."""
+    logger.info("Parsing text with Gemini")
     
-    # Initialize the LLM (temperature 0 for consistent extraction)
-    llm = ChatGoogleGenerativeAI(
-        model="gemini-3.6-flash",
-        temperature=0,
-        google_api_key=settings.google_api_key,
-    )
-    
-    # Bind the target Pydantic schema
-    structured_llm = llm.with_structured_output(ResumeProfile)
+    structured_llm = get_structured_llm(ResumeProfile, temperature=0)
     
     system_prompt = (
         "You are an expert ATS (Applicant Tracking System) parser. "

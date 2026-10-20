@@ -9,9 +9,9 @@ from typing import TypedDict
 
 import pymupdf as fitz  # PyMuPDF
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.graph import END, StateGraph
 
+from app.agents.llm import get_structured_llm
 from app.config import settings
 from app.schemas.ats_checker import ATSCheckResult
 
@@ -53,12 +53,7 @@ def grade_cv_node(state: ATSCheckerState) -> ATSCheckerState:
     """Grade the CV text using Gemini with a detailed adaptive rubric."""
     logger.info("ATS Checker: grading CV with Gemini")
 
-    llm = ChatGoogleGenerativeAI(
-        model="gemini-2.0-flash",
-        temperature=0,
-        google_api_key=settings.google_api_key,
-    )
-    structured_llm = llm.with_structured_output(ATSCheckResult)
+    structured_llm = get_structured_llm(ATSCheckResult, temperature=0)
 
     system_prompt = """\
 You are an expert Applicant Tracking System (ATS) analyst and career advisor.

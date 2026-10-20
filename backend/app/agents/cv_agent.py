@@ -2,9 +2,9 @@ import logging
 from typing import TypedDict
 
 from langchain_core.messages import SystemMessage, HumanMessage
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.graph import StateGraph, END
 
+from app.agents.llm import get_structured_llm
 from app.config import settings
 from app.schemas.profile import ProfileResponse
 from app.schemas.cv import CVGenerateRequest, TailoredCV, JobRequirements
@@ -22,12 +22,7 @@ class CVState(TypedDict):
 def analyze_job_node(state: CVState) -> CVState:
     """Extracts structured requirements from the job description."""
     logger.info("Analyzing Job Description")
-    llm = ChatGoogleGenerativeAI(
-        model="gemini-3.6-flash",
-        temperature=0,
-        google_api_key=settings.google_api_key,
-    )
-    structured_llm = llm.with_structured_output(JobRequirements)
+    structured_llm = get_structured_llm(JobRequirements, temperature=0)
     
     prompt = (
         "You are an expert technical recruiter and ATS specialist. "
@@ -51,12 +46,7 @@ def analyze_job_node(state: CVState) -> CVState:
 def generate_cv_node(state: CVState) -> CVState:
     """Generates the tailored CV based on the profile and job requirements."""
     logger.info("Generating Tailored CV")
-    llm = ChatGoogleGenerativeAI(
-        model="gemini-3.6-flash",
-        temperature=0.2,
-        google_api_key=settings.google_api_key,
-    )
-    structured_llm = llm.with_structured_output(TailoredCV)
+    structured_llm = get_structured_llm(TailoredCV, temperature=0.2)
     
     reqs = state["job_requirements"]
     profile = state["profile"]

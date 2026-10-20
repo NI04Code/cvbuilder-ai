@@ -1,6 +1,10 @@
 """Application configuration via pydantic-settings."""
 
 from pathlib import Path
+from typing import Any
+import json
+
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -27,6 +31,22 @@ class Settings(BaseSettings):
 
     # ── Google Gemini ─────────────────────────────────────────────────────
     google_api_key: str = ""
+    gemini_model: str = "gemini-2.5-flash"
+    gemini_fallback_models: str | list[str] = [
+        "gemini-2.5-pro",
+        "gemini-2.0-flash",
+        "gemini-1.5-pro",
+    ]
+
+    @field_validator("gemini_fallback_models", mode="after")
+    @classmethod
+    def parse_gemini_fallback_models(cls, v: Any) -> list[str]:
+        if isinstance(v, str):
+            val = v.strip()
+            if val.startswith("["):
+                return json.loads(val)
+            return [m.strip() for m in val.split(",") if m.strip()]
+        return v
 
     # ── File Storage ──────────────────────────────────────────────────────
     upload_dir: str = "uploads"
