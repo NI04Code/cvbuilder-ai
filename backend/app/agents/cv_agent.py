@@ -25,16 +25,21 @@ def analyze_job_node(state: CVState) -> CVState:
     logger.info("Analyzing Job Description")
     structured_llm = get_structured_llm(JobRequirements, temperature=0)
     
-    prompt = (
+    persona = (
         "You are an expert technical recruiter and ATS specialist. "
         "Analyze the following job description and extract the key requirements, skills, "
         "responsibilities, and ATS keywords needed to pass the screening. "
-        "Use empty lists [] for any list fields where no items are mentioned."
+    )
+
+    prompt = (
+        f"Job Title: {state['request'].job_title}"
+        f"Company Name: {state['request'].company_name}"
+        f"Job Description:\n\n{state['request'].job_description}"
     )
     
     messages = [
-        SystemMessage(content=prompt),
-        HumanMessage(content=f"Job Description:\n\n{state['request'].job_description}")
+        SystemMessage(content=persona),
+        HumanMessage(content=prompt)
     ]
     
     try:

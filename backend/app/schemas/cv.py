@@ -2,10 +2,20 @@
 
 import uuid
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
 from app.schemas.profile import Certification, Education, Project
+
+SectionKey = Literal[
+    "summary",
+    "skills",
+    "experience",
+    "education",
+    "certifications",
+    "projects",
+]
 
 
 # ── Request Schemas ───────────────────────────────────────────────────────
@@ -35,7 +45,7 @@ class TailoredExperience(BaseModel):
     start_date: str | None = None
     end_date: str | None = None
     location: str | None = None
-    bullets: list[str] | None = Field(
+    bullets: list[str] = Field(
         default_factory=list, description="Tailored bullet points"
     )
 
@@ -46,19 +56,22 @@ class TailoredCV(BaseModel):
     professional_summary: str = Field(
         ..., description="Tailored professional summary for this specific job"
     )
-    work_experiences: list[TailoredExperience] | None = Field(default_factory=list)
-    education: list[Education] | None = Field(default_factory=list)
-    skills: list[str] | None = Field(
+    work_experiences: list[TailoredExperience] = Field(
+        default_factory=list,
+        description="All work experiences from the candidate's profile with bullets tailored to the target job",
+    )
+    education: list[Education] = Field(default_factory=list)
+    skills: list[str] = Field(
         default_factory=list,
         description="Curated skills list prioritized for the job",
     )
-    certifications: list[Certification] | None = Field(default_factory=list)
-    projects: list[Project] | None = Field(default_factory=list)
-    keywords_matched: list[str] | None = Field(
+    certifications: list[Certification] = Field(default_factory=list)
+    projects: list[Project] = Field(default_factory=list)
+    keywords_matched: list[str] = Field(
         default_factory=list,
         description="Job description keywords found in the tailored CV",
     )
-    section_order: list[str] | None = Field(
+    section_order: list[SectionKey] = Field(
         default_factory=lambda: [
             "summary",
             "skills",
@@ -67,7 +80,7 @@ class TailoredCV(BaseModel):
             "certifications",
             "projects",
         ],
-        description="Order of sections to display. Use exact strings: 'summary', 'skills', 'experience', 'education', 'certifications', 'projects'. Reorder based on candidate context (e.g. put education before experience for fresh grads).",
+        description="Complete order of all 6 sections to display. Must include 'summary', 'skills', 'experience', 'education', 'certifications', 'projects'.",
     )
     ats_score: float = Field(
         ..., ge=0, le=100, description="Estimated ATS match percentage"
@@ -82,14 +95,14 @@ class JobRequirements(BaseModel):
 
     job_title: str = Field(..., description="Extracted or provided job title")
     company: str | None = Field(None, description="Company name if mentioned")
-    required_skills: list[str] | None = Field(default_factory=list)
-    preferred_skills: list[str] | None = Field(default_factory=list)
+    required_skills: list[str] = Field(default_factory=list)
+    preferred_skills: list[str] = Field(default_factory=list)
     required_experience_years: int | None = Field(
         None, description="Minimum years of experience required"
     )
-    key_responsibilities: list[str] | None = Field(default_factory=list)
-    education_requirements: list[str] | None = Field(default_factory=list)
-    keywords: list[str] | None = Field(
+    key_responsibilities: list[str] = Field(default_factory=list)
+    education_requirements: list[str] = Field(default_factory=list)
+    keywords: list[str] = Field(
         default_factory=list,
         description="Important ATS keywords to include in the CV",
     )

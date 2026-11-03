@@ -12,6 +12,31 @@ logger = logging.getLogger(__name__)
 
 T = TypeVar("T", bound=BaseModel)
 
+# Groq models that support native Structured Outputs (response_format: json_schema)
+_JSON_SCHEMA_MODELS = (
+    "openai/gpt-oss-120b",
+    "openai/gpt-oss-20b",
+    "meta-llama/llama-4-scout-17b-16e-instruct",
+    "meta-llama/llama-4-maverick-17b-128e-instruct",
+    "moonshotai/kimi-k2-instruct-0905",
+)
+
+
+def _build_structured_groq(
+    model: str,
+    schema: Type[T],
+    temperature: float,
+) -> Runnable:
+    """Create a structured-output ChatGroq runnable using json_schema (constrained decoding) when supported."""
+    llm = ChatGroq(
+        model=model,
+        temperature=temperature,
+        api_key=settings.groq_api_key,
+    )
+    if any(model.startswith(prefix) for prefix in _JSON_SCHEMA_MODELS):
+        return llm.with_structured_output(schema, method="json_schema", strict=True)
+    return llm.with_structured_output(schema)
+
 
 def get_llm(
     temperature: float = 0.0,
@@ -74,21 +99,13 @@ def get_structured_llm(
         else settings.groq_fallback_models
     )
 
-    primary_llm = ChatGroq(
-        model=primary,
-        temperature=temperature,
-        api_key=settings.groq_api_key,
-    ).with_structured_output(schema)
+    primary_llm = _build_structured_groq(primary, schema, temperature)
 
     if not fallbacks:
         return primary_llm
 
     fallback_llms = [
-        ChatGroq(
-            model=m,
-            temperature=temperature,
-            api_key=settings.groq_api_key,
-        ).with_structured_output(schema)
+        _build_structured_groq(m, schema, temperature)
         for m in fallbacks
         if m != primary
     ]

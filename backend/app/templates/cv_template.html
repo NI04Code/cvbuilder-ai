@@ -122,9 +122,22 @@
         {% endif %}
     </div>
 
-    {% set order = cv.section_order if cv.section_order else ["summary", "skills", "experience", "education", "certifications", "projects"] %}
+    {% set default_order = ["summary", "skills", "experience", "education", "certifications", "projects"] %}
+    {% set raw_order = cv.section_order if cv.section_order else default_order %}
+    {% set ns = namespace(order=[]) %}
+    {% for s in raw_order %}
+        {% set norm = "summary" if s == "professional_summary" else ("experience" if s in ["work_experiences", "work_experience"] else s) %}
+        {% if norm not in ns.order %}
+            {% set ns.order = ns.order + [norm] %}
+        {% endif %}
+    {% endfor %}
+    {% for s in default_order %}
+        {% if s not in ns.order %}
+            {% set ns.order = ns.order + [s] %}
+        {% endif %}
+    {% endfor %}
 
-    {% for section in order %}
+    {% for section in ns.order %}
 
         {% if section == "summary" and cv.professional_summary %}
             <h2>Professional Summary</h2>

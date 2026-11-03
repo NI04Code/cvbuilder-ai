@@ -27,7 +27,7 @@ class ATSSectionScore(BaseModel):
     feedback: str = Field(
         ..., description="Specific feedback explaining the score"
     )
-    suggestions: list[str] | None = Field(
+    suggestions: list[str] = Field(
         default_factory=list,
         description="Actionable improvement suggestions for this section",
     )
@@ -36,11 +36,11 @@ class ATSSectionScore(BaseModel):
 class ATSKeywordAnalysis(BaseModel):
     """Keyword presence and optimization analysis."""
 
-    detected_keywords: list[str] | None = Field(
+    detected_keywords: list[str] = Field(
         default_factory=list,
         description="Industry-relevant keywords found in the CV",
     )
-    missing_common_keywords: list[str] | None = Field(
+    missing_common_keywords: list[str] = Field(
         default_factory=list,
         description=(
             "Common industry keywords that could strengthen the CV but are currently absent. "
@@ -93,12 +93,12 @@ class ATSCheckResult(BaseModel):
         ),
     )
     keyword_analysis: ATSKeywordAnalysis
-    formatting_issues: list[ATSFormattingIssue] | None = Field(default_factory=list)
-    strengths: list[str] | None = Field(
+    formatting_issues: list[ATSFormattingIssue] = Field(default_factory=list)
+    strengths: list[str] = Field(
         default_factory=list,
         description="Key strengths of the CV from an ATS perspective",
     )
-    improvements: list[str] | None = Field(
+    improvements: list[str] = Field(
         default_factory=list,
         description="Top priority improvements the candidate should make",
     )
