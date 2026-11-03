@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import TypedDict
 
@@ -27,7 +28,8 @@ def analyze_job_node(state: CVState) -> CVState:
     prompt = (
         "You are an expert technical recruiter and ATS specialist. "
         "Analyze the following job description and extract the key requirements, skills, "
-        "responsibilities, and ATS keywords needed to pass the screening."
+        "responsibilities, and ATS keywords needed to pass the screening. "
+        "Use empty lists [] for any list fields where no items are mentioned."
     )
     
     messages = [
@@ -61,7 +63,7 @@ def generate_cv_node(state: CVState) -> CVState:
         "with the job requirements and seamlessly integrate ATS keywords. "
         "CRITICAL RULES: "
         "1. DO NOT lie or invent experience/data the candidate does not have. You can change wording but cannot add new hallucinated data. "
-        "2. Only output sections that have provided data. If the profile lacks data (e.g., no projects), omit the section entirely and DO NOT hallucinate it. "
+        "2. Only output sections that have provided data. If the profile lacks data (e.g., no projects or certifications), return an empty list [] for that section and DO NOT hallucinate it. "
         "3. For detailed job titles, use a hyphen '-' instead of parentheses '()'. (e.g., 'Software Engineer - DevOps', NOT 'Software Engineer (DevOps)'). "
         "4. You may logically reorder sections (e.g., placing Education before Experience if the candidate is a fresh graduate). "
         "Prioritize the most relevant skills. Estimate a realistic ATS match score (0-100) based on the match."
@@ -114,7 +116,7 @@ async def process_cv_generation(profile: ProfileResponse, request: CVGenerateReq
         "error": None
     }
     
-    final_state = cv_generator_app.invoke(initial_state)
+    final_state = await asyncio.to_thread(cv_generator_app.invoke, initial_state)
     
     return {
         "tailored_cv": final_state.get("tailored_cv"),

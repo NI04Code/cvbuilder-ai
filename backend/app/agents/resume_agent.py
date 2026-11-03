@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import TypedDict
 
@@ -92,7 +93,7 @@ async def process_resume(file_path: str) -> dict:
     # Run the graph synchronously as PyMuPDF is sync and langchain invoke is blocking by default here,
     # though we could use ainvoke if we updated the node to be async.
     # For now, we'll just run it with standard invoke.
-    final_state = resume_parser_app.invoke(initial_state)
+    final_state = await asyncio.to_thread(resume_parser_app.invoke, initial_state)
     
     return {
         "raw_text": final_state.get("raw_text"),

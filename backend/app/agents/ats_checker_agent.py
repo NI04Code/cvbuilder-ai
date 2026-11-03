@@ -4,6 +4,7 @@ Processes PDF bytes in memory (no disk I/O) and produces a structured
 ATSCheckResult with adaptive, career-level-aware scoring.
 """
 
+import asyncio
 import logging
 from typing import TypedDict
 
@@ -155,7 +156,7 @@ async def check_cv_ats(file_bytes: bytes) -> dict:
         "error": None,
     }
 
-    final_state = ats_checker_app.invoke(initial_state)
+    final_state = await asyncio.to_thread(ats_checker_app.invoke, initial_state)
 
     return {
         "result": final_state.get("result"),
