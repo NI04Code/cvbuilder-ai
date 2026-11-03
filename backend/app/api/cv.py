@@ -1,5 +1,6 @@
 """API endpoints for generating and retrieving tailored CVs."""
 
+import asyncio
 import uuid
 from datetime import datetime, timezone
 
@@ -70,7 +71,7 @@ async def generate_cv(
         personal_info = PersonalInfo(name=current_user.name or "Candidate")
         
     try:
-        generate_cv_pdf(tailored_cv, personal_info, str(pdf_path))
+        await asyncio.to_thread(generate_cv_pdf, tailored_cv, personal_info, str(pdf_path))
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

@@ -3,7 +3,7 @@
 from fastapi import APIRouter
 
 from app.api.auth import router as auth_router
-from app.api.resume import router as resume_router
+from app.api.resume_parser import router as resume_router
 from app.api.profile import router as profile_router
 from app.api.cv import router as cv_router
 from app.api.ats_checker import router as ats_checker_router

@@ -159,11 +159,13 @@
                                 </td>
                             </tr>
                         </table>
+                        {% if exp.bullets %}
                         <ul>
                             {% for bullet in exp.bullets %}
                                 <li>{{ bullet }}</li>
                             {% endfor %}
                         </ul>
+                        {% endif %}
                     </div>
                 {% endfor %}
             </div>

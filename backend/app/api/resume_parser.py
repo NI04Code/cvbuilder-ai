@@ -69,11 +69,11 @@ async def upload_resume(
         # Update existing
         profile.personal_info = parsed_profile.personal_info.model_dump() if parsed_profile.personal_info else None
         profile.summary = parsed_profile.summary
-        profile.work_experiences = [w.model_dump() for w in parsed_profile.work_experiences]
-        profile.education = [e.model_dump() for e in parsed_profile.education]
+        profile.work_experiences = [w.model_dump() for w in (parsed_profile.work_experiences or [])]
+        profile.education = [e.model_dump() for e in (parsed_profile.education or [])]
         profile.skills = parsed_profile.skills.model_dump() if parsed_profile.skills else None
-        profile.certifications = [c.model_dump() for c in parsed_profile.certifications]
-        profile.projects = [p.model_dump() for p in parsed_profile.projects]
+        profile.certifications = [c.model_dump() for c in (parsed_profile.certifications or [])]
+        profile.projects = [p.model_dump() for p in (parsed_profile.projects or [])]
         profile.raw_resume_text = result["raw_text"]
         profile.source_file_path = str(file_path)
         profile.parsed_at = datetime.now(timezone.utc)
@@ -83,11 +83,11 @@ async def upload_resume(
             user_id=current_user.id,
             personal_info=parsed_profile.personal_info.model_dump() if parsed_profile.personal_info else None,
             summary=parsed_profile.summary,
-            work_experiences=[w.model_dump() for w in parsed_profile.work_experiences],
-            education=[e.model_dump() for e in parsed_profile.education],
+            work_experiences=[w.model_dump() for w in (parsed_profile.work_experiences or [])],
+            education=[e.model_dump() for e in (parsed_profile.education or [])],
             skills=parsed_profile.skills.model_dump() if parsed_profile.skills else None,
-            certifications=[c.model_dump() for c in parsed_profile.certifications],
-            projects=[p.model_dump() for p in parsed_profile.projects],
+            certifications=[c.model_dump() for c in (parsed_profile.certifications or [])],
+            projects=[p.model_dump() for p in (parsed_profile.projects or [])],
             raw_resume_text=result["raw_text"],
             source_file_path=str(file_path),
             parsed_at=datetime.now(timezone.utc),

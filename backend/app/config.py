@@ -38,9 +38,17 @@ class Settings(BaseSettings):
         "gemini-1.5-pro",
     ]
 
-    @field_validator("gemini_fallback_models", mode="after")
+    # ── Groq ──────────────────────────────────────────────────────────────
+    groq_api_key: str = ""
+    groq_model: str = "openai/gpt-oss-120b"
+    groq_fallback_models: str | list[str] = [
+        "meta-llama/llama-4-scout-17b-16e-instruct",
+        "llama-3.1-8b-instant",
+    ]
+
+    @field_validator("gemini_fallback_models", "groq_fallback_models", mode="after")
     @classmethod
-    def parse_gemini_fallback_models(cls, v: Any) -> list[str]:
+    def parse_fallback_models(cls, v: Any) -> list[str]:
         if isinstance(v, str):
             val = v.strip()
             if val.startswith("["):
