@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { apiClient } from "@/lib/api";
+import { useIsInsideDashboard } from "@/context/CVGenerationContext";
 import styles from "./page.module.css";
 
 // ── Types matching the backend ATSCheckResult schema ────────────────────
@@ -102,6 +103,7 @@ function scoreTier(score: number): "high" | "mid" | "low" {
 // ── Main Page Component ─────────────────────────────────────────────────
 
 export default function ATSCheckerPage() {
+  const isDashboard = useIsInsideDashboard();
   const [isDragging, setIsDragging] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -167,29 +169,38 @@ export default function ATSCheckerPage() {
   // ── Render ──────────────────────────────────────────────────────
 
   return (
-    <div className={styles.container}>
-      {/* Nav */}
-      <nav className={styles.nav}>
-        <Link href="/" className={styles.logo}>
-          <FileText size={24} className={styles.logoIcon} />
-          CVBuilder <span className="gradient-text">AI</span>
-        </Link>
-        <div className={styles.navLinks}>
-          <Link href="/login" className={styles.navLink}>
-            Sign In
+    <div className={isDashboard ? styles.dashboardContainer : styles.container}>
+      {/* Nav (public view only) */}
+      {!isDashboard && (
+        <nav className={styles.nav}>
+          <Link href="/" className={styles.logo}>
+            <FileText size={24} className={styles.logoIcon} />
+            CVBuilder <span className="gradient-text">AI</span>
           </Link>
-        </div>
-      </nav>
+          <div className={styles.navLinks}>
+            <Link href="/login" className={styles.navLink}>
+              Sign In
+            </Link>
+          </div>
+        </nav>
+      )}
 
       {/* Main */}
-      <main className={styles.main}>
-        <header className={styles.header}>
-          <h1 className={styles.title}>
-            Free <span className="gradient-text">ATS Checker</span>
+      <div className={isDashboard ? styles.dashboardMain : styles.main}>
+        <header className={isDashboard ? styles.dashboardHeader : styles.header}>
+          <h1 className={isDashboard ? styles.dashboardTitle : styles.title}>
+            {isDashboard ? (
+              "ATS Checker"
+            ) : (
+              <>
+                Free <span className="gradient-text">ATS Checker</span>
+              </>
+            )}
           </h1>
-          <p className={styles.subtitle}>
-            Upload your CV and get an instant, detailed ATS compatibility
-            report — no sign-up required.
+          <p className={isDashboard ? styles.dashboardSubtitle : styles.subtitle}>
+            {isDashboard
+              ? "Upload your CV and get an instant, detailed ATS compatibility report."
+              : "Upload your CV and get an instant, detailed ATS compatibility report — no sign-up required."}
           </p>
         </header>
 
@@ -451,7 +462,8 @@ export default function ATSCheckerPage() {
             </div>
           </motion.div>
         )}
-      </main>
+      </div>
     </div>
   );
 }
+

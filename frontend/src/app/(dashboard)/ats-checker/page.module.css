@@ -4,6 +4,12 @@
   flex-direction: column;
 }
 
+.dashboardContainer {
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 2rem;
+}
+
 /* ── Shared Nav (matches landing page) ─────────────────────────────────── */
 
 .nav {
@@ -56,9 +62,18 @@
   width: 100%;
 }
 
+.dashboardMain {
+  width: 100%;
+  max-width: 1100px;
+}
+
 .header {
   text-align: center;
   margin-bottom: 3rem;
+}
+
+.dashboardHeader {
+  margin-bottom: 2rem;
 }
 
 .title {
@@ -68,11 +83,23 @@
   margin-bottom: 1rem;
 }
 
+.dashboardTitle {
+  font-size: 2rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
 .subtitle {
   font-size: 1.125rem;
   color: #94a3b8;
   max-width: 600px;
   margin: 0 auto;
+  line-height: 1.6;
+}
+
+.dashboardSubtitle {
+  color: #94a3b8;
+  font-size: 1rem;
   line-height: 1.6;
 }
 
@@ -580,3 +607,4 @@
     align-self: center;
   }
 }
+

@@ -1,66 +1,49 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { FileSignature, Sparkles, Download, Eye, AlertCircle } from "lucide-react";
 import { motion } from "framer-motion";
 import { useSession } from "next-auth/react";
 import { apiClient } from "@/lib/api";
+import { useCVGeneration } from "@/context/CVGenerationContext";
 import styles from "./page.module.css";
 import Link from "next/link";
 
 export default function GeneratePage() {
-  const { data: session } = useSession();
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [formData, setFormData] = useState({
-    job_title: "",
-    company_name: "",
-    job_description: "",
-  });
-  
-  // State for the generated CV response
-  const [generatedCv, setGeneratedCv] = useState<any>(null);
+  const { data: session, status, update } = useSession();
+  const { isGenerating, error, formData, generatedCv, setFormData, startGeneration } = useCVGeneration();
+  const [hasProfile, setHasProfile] = useState<boolean | null>(null);
 
-  const hasProfile = (session as any)?.hasProfile;
-
-  const handleGenerate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.job_description || formData.job_description.length < 50) {
-      setError("Please provide a more detailed job description (at least 50 characters).");
+  useEffect(() => {
+    if (status !== "authenticated") return;
+    if ((session as any)?.hasProfile === true) {
+      setHasProfile(true);
       return;
     }
 
-    setError(null);
-    setIsGenerating(true);
-
-    try {
-      const token = (session as any)?.backendAccessToken;
-      const response = await apiClient.post("/cv/generate", formData, {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+    const token = (session as any)?.backendAccessToken;
+    apiClient
+      .get("/profile/", { headers: { Authorization: `Bearer ${token}` } })
+      .then(() => {
+        setHasProfile(true);
+        update({ hasProfile: true });
+      })
+      .catch(() => {
+        setHasProfile(false);
       });
+  }, [status, session, update]);
 
-      setGeneratedCv(response.data);
-    } catch (err: any) {
-      console.error("Generation error:", err);
-      setError(err.response?.data?.detail || "An error occurred while generating your CV.");
-    } finally {
-      setIsGenerating(false);
-    }
+  const handleGenerate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await startGeneration();
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    setFormData({
-      ...formData,
+    setFormData((prev) => ({
+      ...prev,
       [e.target.name]: e.target.value,
-    });
+    }));
   };
-
-  // We serve the PDF statically from backend if we implement a download endpoint
-  // For now, we'll assume the API returns pdf_file_path which we can fetch, or we build a /api/cv/{id}/download endpoint
-  const downloadUrl = generatedCv ? `${process.env.NEXT_PUBLIC_API_URL}/cv/${generatedCv.id}/download` : "";
 
   if (hasProfile === false) {
     return (
@@ -168,9 +151,6 @@ export default function GeneratePage() {
                   ATS: {generatedCv.ats_score}%
                 </div>
               )}
-              {/* Note: The actual download requires the token. For an <iframe> or a simple <a href> it's tricky with JWT. 
-                  In a real scenario, we might use a short-lived download token or fetch as blob. 
-                  For now, we will just use a button that triggers a fetch and download. */}
               <button className={styles.actionBtn} onClick={async () => {
                 const token = (session as any)?.backendAccessToken;
                 const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/cv/${generatedCv.id}/download`, {
@@ -200,7 +180,6 @@ export default function GeneratePage() {
             </div>
           ) : generatedCv ? (
             <div className={styles.emptyPreview}>
-              {/* In a complete app, we could render the HTML preview here or embed a PDF viewer. */}
               <FileSignature size={64} className="mb-4 text-green-500 opacity-80" />
               <h3 className="text-lg font-medium text-gray-800">CV Generated Successfully!</h3>
               <p className="text-sm mt-2 text-gray-500">

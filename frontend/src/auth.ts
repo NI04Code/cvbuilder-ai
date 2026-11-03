@@ -30,7 +30,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [Google, GitHub],
   callbacks: {
     ...authConfig.callbacks,
-    async jwt({ token, user, account, profile }) {
+    async jwt({ token, user, account, trigger, session }) {
+      if (trigger === "update" && session?.hasProfile !== undefined) {
+        token.hasProfile = session.hasProfile;
+      }
       // Initial sign in
       if (account && user) {
         try {
