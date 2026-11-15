@@ -3,7 +3,24 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationInfo, field_validator
+
+from app.utils.url import sanitize_external_url
+
+
+def _clean_optional_url(value: str | None) -> str | None:
+    """Normalize valid http(s) URLs while preserving empty input as None."""
+    if value is None or not value.strip():
+        return None
+    safe = sanitize_external_url(value)
+    if safe is not None:
+        return safe
+    # Preserve bare social placeholder tokens like 'LinkedIn' when parsed from linkless text,
+    # but reject dangerous URI schemes.
+    lower = value.strip().lower()
+    if any(lower.startswith(bad) for bad in ("javascript:", "data:", "vbscript:", "file:")):
+        return None
+    return value.strip()
 
 
 # ── Nested profile components ─────────────────────────────────────────────
@@ -16,6 +33,12 @@ class PersonalInfo(BaseModel):
     location: str | None = Field(None, description="City, State/Country")
     linkedin_url: str | None = Field(None, description="LinkedIn profile URL")
     portfolio_url: str | None = Field(None, description="Portfolio or personal website")
+    other_url: str | None = Field(None, description="Other profile or reference link (e.g., GitHub, Kaggle)")
+
+    @field_validator("linkedin_url", "portfolio_url", "other_url", mode="after")
+    @classmethod
+    def validate_profile_urls(cls, value: str | None) -> str | None:
+        return _clean_optional_url(value)
 
 
 class WorkExperience(BaseModel):
@@ -47,6 +70,24 @@ class Certification(BaseModel):
     issuer: str | None = Field(None, description="Issuing organization")
     date: str | None = Field(None, description="Date obtained")
     credential_id: str | None = None
+    url: str | None = Field(None, description="Certification credential or verification URL")
+
+    @field_validator("url", mode="after")
+    @classmethod
+    def validate_cert_url(cls, value: str | None) -> str | None:
+        return _clean_optional_url(value)
+
+
+class LeadershipActivity(BaseModel):
+    organization: str = Field("", description="Organization, club, or academic body name")
+    title: str = Field(..., description="Leadership role, position, or activity title")
+    start_date: str | None = Field(None, description="Start date (e.g., Aug 2023)")
+    end_date: str | None = Field(None, description="End date or 'Present'")
+    location: str | None = Field(None, description="Location")
+    bullets: list[str] = Field(
+        default_factory=list,
+        description="Bullet point contributions, leadership impact, or activities",
+    )
 
 
 class Project(BaseModel):
@@ -54,6 +95,11 @@ class Project(BaseModel):
     description: str | None = Field(None, description="Brief project description")
     technologies: list[str] = Field(default_factory=list)
     url: str | None = None
+
+    @field_validator("url", mode="after")
+    @classmethod
+    def validate_project_url(cls, value: str | None) -> str | None:
+        return _clean_optional_url(value)
 
 
 class SkillSet(BaseModel):
@@ -73,6 +119,7 @@ class ResumeProfile(BaseModel):
     summary: str = Field("", description="Professional summary or objective")
     work_experiences: list[WorkExperience] = Field(default_factory=list)
     education: list[Education] = Field(default_factory=list)
+    leadership_activities: list[LeadershipActivity] = Field(default_factory=list)
     skills: SkillSet = Field(default_factory=SkillSet)
     certifications: list[Certification] = Field(default_factory=list)
     projects: list[Project] = Field(default_factory=list)
@@ -90,11 +137,21 @@ class ProfileResponse(BaseModel):
     summary: str | None = None
     work_experiences: list[WorkExperience] = Field(default_factory=list)
     education: list[Education] = Field(default_factory=list)
+    leadership_activities: list[LeadershipActivity] = Field(default_factory=list)
     skills: SkillSet | None = None
     certifications: list[Certification] = Field(default_factory=list)
     projects: list[Project] = Field(default_factory=list)
     parsed_at: datetime | None = None
     updated_at: datetime
+
+    @field_validator("*", mode="before")
+    @classmethod
+    def coerce_null_lists(cls, v: object, info: ValidationInfo) -> object:
+        """Automatically convert SQL NULL to [] for any list field with default_factory=list."""
+        if v is None and info.field_name in cls.model_fields:
+            if cls.model_fields[info.field_name].default_factory is list:
+                return []
+        return v
 
     model_config = {"from_attributes": True}
 
@@ -106,6 +163,7 @@ class ProfileUpdateRequest(BaseModel):
     summary: str | None = None
     work_experiences: list[WorkExperience] | None = None
     education: list[Education] | None = None
+    leadership_activities: list[LeadershipActivity] | None = None
     skills: SkillSet | None = None
     certifications: list[Certification] | None = None
     projects: list[Project] | None = None

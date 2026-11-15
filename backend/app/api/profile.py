@@ -65,6 +65,8 @@ async def update_profile(
             profile.work_experiences = [w.model_dump() for w in data.work_experiences]
         if data.education is not None:
             profile.education = [e.model_dump() for e in data.education]
+        if data.leadership_activities is not None:
+            profile.leadership_activities = [l.model_dump() for l in data.leadership_activities]
         if data.skills is not None:
             profile.skills = data.skills.model_dump()
         if data.certifications is not None:
@@ -81,6 +83,7 @@ async def update_profile(
             summary=data.summary,
             work_experiences=[w.model_dump() for w in data.work_experiences] if data.work_experiences else [],
             education=[e.model_dump() for e in data.education] if data.education else [],
+            leadership_activities=[l.model_dump() for l in data.leadership_activities] if data.leadership_activities else [],
             skills=data.skills.model_dump() if data.skills else None,
             certifications=[c.model_dump() for c in data.certifications] if data.certifications else [],
             projects=[p.model_dump() for p in data.projects] if data.projects else [],

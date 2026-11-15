@@ -22,17 +22,31 @@ _JSON_SCHEMA_MODELS = (
 )
 
 
+def _create_chat_groq(
+    model: str,
+    temperature: float,
+    max_tokens: int | None = None,
+) -> ChatGroq:
+    """Create a configured ChatGroq client with an explicit completion token budget."""
+    kwargs: dict = {
+        "model": model,
+        "temperature": temperature,
+        "max_tokens": max_tokens or settings.groq_max_tokens,
+        "api_key": settings.groq_api_key,
+    }
+    if model.startswith("openai/gpt-oss"):
+        kwargs["reasoning_effort"] = "low"
+    return ChatGroq(**kwargs)
+
+
 def _build_structured_groq(
     model: str,
     schema: Type[T],
     temperature: float,
+    max_tokens: int | None = None,
 ) -> Runnable:
     """Create a structured-output ChatGroq runnable using json_schema (constrained decoding) when supported."""
-    llm = ChatGroq(
-        model=model,
-        temperature=temperature,
-        api_key=settings.groq_api_key,
-    )
+    llm = _create_chat_groq(model=model, temperature=temperature, max_tokens=max_tokens)
     if any(model.startswith(prefix) for prefix in _JSON_SCHEMA_MODELS):
         return llm.with_structured_output(schema, method="json_schema", strict=True)
     return llm.with_structured_output(schema)
@@ -42,6 +56,7 @@ def get_llm(
     temperature: float = 0.0,
     primary_model: str | None = None,
     fallback_models: list[str] | None = None,
+    max_tokens: int | None = None,
 ) -> Runnable:
     """
     Returns an LLM runnable with automatic dynamic fallback to other Groq models
@@ -54,20 +69,20 @@ def get_llm(
         else settings.groq_fallback_models
     )
 
-    primary_llm = ChatGroq(
+    primary_llm = _create_chat_groq(
         model=primary,
         temperature=temperature,
-        api_key=settings.groq_api_key,
+        max_tokens=max_tokens,
     )
 
     if not fallbacks:
         return primary_llm
 
     fallback_llms = [
-        ChatGroq(
+        _create_chat_groq(
             model=m,
             temperature=temperature,
-            api_key=settings.groq_api_key,
+            max_tokens=max_tokens,
         )
         for m in fallbacks
         if m != primary
@@ -87,6 +102,7 @@ def get_structured_llm(
     temperature: float = 0.0,
     primary_model: str | None = None,
     fallback_models: list[str] | None = None,
+    max_tokens: int | None = None,
 ) -> Runnable:
     """
     Returns a structured-output LLM runnable bound to a Pydantic schema,
@@ -99,13 +115,13 @@ def get_structured_llm(
         else settings.groq_fallback_models
     )
 
-    primary_llm = _build_structured_groq(primary, schema, temperature)
+    primary_llm = _build_structured_groq(primary, schema, temperature, max_tokens)
 
     if not fallbacks:
         return primary_llm
 
     fallback_llms = [
-        _build_structured_groq(m, schema, temperature)
+        _build_structured_groq(m, schema, temperature, max_tokens)
         for m in fallbacks
         if m != primary
     ]

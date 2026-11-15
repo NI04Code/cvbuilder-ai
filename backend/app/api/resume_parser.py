@@ -71,6 +71,7 @@ async def upload_resume(
         profile.summary = parsed_profile.summary
         profile.work_experiences = [w.model_dump() for w in (parsed_profile.work_experiences or [])]
         profile.education = [e.model_dump() for e in (parsed_profile.education or [])]
+        profile.leadership_activities = [l.model_dump() for l in (parsed_profile.leadership_activities or [])]
         profile.skills = parsed_profile.skills.model_dump() if parsed_profile.skills else None
         profile.certifications = [c.model_dump() for c in (parsed_profile.certifications or [])]
         profile.projects = [p.model_dump() for p in (parsed_profile.projects or [])]
@@ -85,6 +86,7 @@ async def upload_resume(
             summary=parsed_profile.summary,
             work_experiences=[w.model_dump() for w in (parsed_profile.work_experiences or [])],
             education=[e.model_dump() for e in (parsed_profile.education or [])],
+            leadership_activities=[l.model_dump() for l in (parsed_profile.leadership_activities or [])],
             skills=parsed_profile.skills.model_dump() if parsed_profile.skills else None,
             certifications=[c.model_dump() for c in (parsed_profile.certifications or [])],
             projects=[p.model_dump() for p in (parsed_profile.projects or [])],

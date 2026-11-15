@@ -41,9 +41,10 @@ class Settings(BaseSettings):
     # ── Groq ──────────────────────────────────────────────────────────────
     groq_api_key: str = ""
     groq_model: str = "openai/gpt-oss-120b"
+    groq_max_tokens: int = 8192
     groq_fallback_models: str | list[str] = [
         "openai/gpt-oss-20b",
-        "meta-llama/llama-4-scout-17b-16e-instruct",
+        "qwen/qwen3.8-27b",
     ]
 
     @field_validator("gemini_fallback_models", "groq_fallback_models", mode="after")

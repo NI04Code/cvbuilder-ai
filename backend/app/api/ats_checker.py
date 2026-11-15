@@ -1,6 +1,6 @@
 """Public ATS Checker API endpoint — no authentication required."""
 
-from fastapi import APIRouter, File, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile, status
 
 from app.agents.ats_checker_agent import check_cv_ats
 from app.schemas.ats_checker import ATSCheckResult
@@ -20,6 +20,7 @@ MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 async def analyze_cv(
     request: Request,
     file: UploadFile = File(...),
+    target_role: str | None = Form(default=None),
 ) -> ATSCheckResult:
     """
     Upload a PDF resume/CV and receive a detailed ATS compatibility report.
@@ -50,7 +51,7 @@ async def analyze_cv(
         )
 
     # Run ATS analysis (in-memory, no disk write)
-    result = await check_cv_ats(file_bytes)
+    result = await check_cv_ats(file_bytes, target_role=target_role)
 
     if result.get("error") or not result.get("result"):
         raise HTTPException(

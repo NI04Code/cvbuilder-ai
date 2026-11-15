@@ -6,13 +6,13 @@
     <style>
         @page {
             size: A4;
-            margin: 0.8in;
+            margin: 0.6in;
         }
         
         body {
-            font-family: 'Helvetica', 'Arial', sans-serif;
+            font-family: 'Calibri', 'Arial', 'Helvetica', sans-serif;
             font-size: 10pt;
-            line-height: 1.4;
+            line-height: 1.22;
             color: #000;
             margin: 0;
             padding: 0;
@@ -21,48 +21,81 @@
         h1 {
             font-size: 18pt;
             text-align: center;
-            margin-bottom: 5px;
+            margin-top: 0;
+            margin-bottom: 2px;
             text-transform: uppercase;
             letter-spacing: 1px;
         }
 
         .contact-info {
             text-align: center;
-            font-size: 9pt;
-            margin-bottom: 20px;
+            font-size: 10pt;
+            margin-bottom: 8px;
         }
 
         .contact-item {
             margin: 0 5px;
         }
 
+        table, tr, td {
+            margin: 0;
+            padding: 0;
+            border-spacing: 0;
+            border-collapse: collapse;
+        }
+
+        /* Keep each section atomic so it never splits across two pages */
+        .section-block {
+            width: 100%;
+            margin-bottom: 4px;
+            page-break-inside: avoid;
+            break-inside: avoid;
+        }
+
+        .section-cell {
+            width: 100%;
+            vertical-align: top;
+        }
+
         h2 {
             font-size: 12pt;
             text-transform: uppercase;
             border-bottom: 1px solid #000;
-            padding-bottom: 3px;
-            margin-top: 15px;
-            margin-bottom: 10px;
+            padding-bottom: 1px;
+            margin-top: 4px;
+            margin-bottom: 3px;
+            page-break-after: avoid;
+            break-after: avoid;
         }
 
         p {
             margin-top: 0;
-            margin-bottom: 8px;
+            margin-bottom: 2px;
             text-align: justify;
         }
 
         .section-content {
-            margin-bottom: 15px;
+            margin-bottom: 1px;
+        }
+
+        .cv-item {
+            margin-bottom: 4px;
+            page-break-inside: avoid;
+            break-inside: avoid;
+        }
+
+        .cv-item-compact {
+            margin-bottom: 3px;
+            page-break-inside: avoid;
+            break-inside: avoid;
         }
 
         /* Use a table for headers to guarantee left/right split with no wrapping on date */
         .item-header-table {
             width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 2px;
+            margin-bottom: 1px;
         }
         .item-header-table td {
-            padding: 0;
             vertical-align: baseline;
         }
         .item-left {
@@ -71,8 +104,11 @@
         .item-right {
             text-align: right;
             font-style: italic;
-            font-size: 9.5pt;
+            font-size: 10pt;
             white-space: nowrap;
+        }
+        .item-header {
+            margin-bottom: 1px;
         }
 
         .item-title {
@@ -84,19 +120,30 @@
         }
 
         ul {
-            margin-top: 3px;
-            margin-bottom: 12px;
-            padding-left: 20px;
+            margin-top: 1px;
+            margin-bottom: 2px;
+            padding-left: 15px;
         }
 
         li {
-            margin-bottom: 3px;
+            margin-bottom: 1px;
             text-align: justify;
         }
         
         .skills-list {
-            margin-bottom: 5px;
+            margin-bottom: 1px;
             text-align: justify;
+        }
+
+        .skill-category-row {
+            margin-bottom: 1px;
+            white-space: nowrap;
+            text-align: left;
+        }
+
+        .cv-link {
+            color: #000;
+            text-decoration: none;
         }
     </style>
 </head>
@@ -105,150 +152,226 @@
     <!-- Header -->
     <h1>{{ personal_info.name }}</h1>
     <div class="contact-info">
-        {% if personal_info.email %}
-            <span class="contact-item">{{ personal_info.email }}</span>
-        {% endif %}
-        {% if personal_info.phone %}
-            | <span class="contact-item">{{ personal_info.phone }}</span>
-        {% endif %}
-        {% if personal_info.location %}
-            | <span class="contact-item">{{ personal_info.location }}</span>
-        {% endif %}
-        {% if personal_info.linkedin_url %}
-            | <span class="contact-item"><a href="{{ personal_info.linkedin_url }}" style="color: black; text-decoration: none;">LinkedIn</a></span>
-        {% endif %}
-        {% if personal_info.portfolio_url %}
-            | <span class="contact-item"><a href="{{ personal_info.portfolio_url }}" style="color: black; text-decoration: none;">Portfolio</a></span>
-        {% endif %}
+        {% for item in header_items %}
+            {% if not loop.first %} | {% endif %}
+            <span class="contact-item">
+                {% if item.href %}
+                    <a href="{{ item.href }}" class="cv-link">{{ item.label }}</a>
+                {% else %}
+                    {{ item.label }}
+                {% endif %}
+            </span>
+        {% endfor %}
     </div>
 
-    {% set default_order = ["summary", "skills", "experience", "education", "certifications", "projects"] %}
+    {% set default_order = ["summary", "experience", "education", "leadership", "certifications", "projects", "skills"] %}
     {% set raw_order = cv.section_order if cv.section_order else default_order %}
-    {% set ns = namespace(order=[]) %}
+    {% set ns = namespace(core=[]) %}
     {% for s in raw_order %}
-        {% set norm = "summary" if s == "professional_summary" else ("experience" if s in ["work_experiences", "work_experience"] else s) %}
-        {% if norm not in ns.order %}
-            {% set ns.order = ns.order + [norm] %}
+        {% set norm = "experience" if s in ["work_experiences", "work_experience"] else s %}
+        {% if norm in ["experience", "education"] and norm not in ns.core %}
+            {% set ns.core = ns.core + [norm] %}
         {% endif %}
     {% endfor %}
-    {% for s in default_order %}
-        {% if s not in ns.order %}
-            {% set ns.order = ns.order + [s] %}
+    {% for s in ["experience", "education"] %}
+        {% if s not in ns.core %}
+            {% set ns.core = ns.core + [s] %}
         {% endif %}
     {% endfor %}
+    {% set final_order = ["summary"] + ns.core + ["leadership", "certifications", "projects", "skills"] %}
 
-    {% for section in ns.order %}
+    {% for section in final_order %}
 
         {% if section == "summary" and cv.professional_summary %}
-            <h2>Professional Summary</h2>
-            <div class="section-content">
-                <p>{{ cv.professional_summary }}</p>
-            </div>
-        {% endif %}
-
-        {% if section == "skills" and cv.skills and cv.skills|length > 0 %}
-            <h2>Technical Skills</h2>
-            <div class="section-content">
-                <p class="skills-list">
-                    {{ cv.skills | join(', ') }}
-                </p>
-            </div>
+            <table class="section-block">
+                <tr>
+                    <td class="section-cell">
+                        <h2>Professional Summary</h2>
+                        <div class="section-content">
+                            <p>{{ cv.professional_summary }}</p>
+                        </div>
+                    </td>
+                </tr>
+            </table>
         {% endif %}
 
         {% if section == "experience" and cv.work_experiences and cv.work_experiences|length > 0 %}
-            <h2>Professional Experience</h2>
-            <div class="section-content">
-                {% for exp in cv.work_experiences %}
-                    <div style="margin-bottom: 12px;">
-                        <table class="item-header-table">
-                            <tr>
-                                <td class="item-left">
-                                    <span class="item-title">{{ exp.title }}</span>
-                                    {% if exp.company %} | <span class="item-subtitle">{{ exp.company }}</span> {% endif %}
-                                    {% if exp.location %} - <span>{{ exp.location }}</span> {% endif %}
-                                </td>
-                                <td class="item-right">
-                                    {% if exp.start_date %}{{ exp.start_date }} - {% endif %}{{ exp.end_date | default('Present') }}
-                                </td>
-                            </tr>
-                        </table>
-                        {% if exp.bullets %}
-                        <ul>
-                            {% for bullet in exp.bullets %}
-                                <li>{{ bullet }}</li>
+            <table class="section-block">
+                <tr>
+                    <td class="section-cell">
+                        <h2>Professional Experience</h2>
+                        <div class="section-content">
+                            {% for exp in cv.work_experiences %}
+                                <div class="cv-item">
+                                    <table class="item-header-table">
+                                        <tr>
+                                            <td class="item-left">
+                                                <span class="item-title">{{ exp.title }}</span>
+                                                {% if exp.company %} | <span class="item-subtitle">{{ exp.company }}</span> {% endif %}
+                                                {% if exp.location %} - <span>{{ exp.location }}</span> {% endif %}
+                                            </td>
+                                            <td class="item-right">
+                                                {% if exp.start_date %}{{ exp.start_date }} - {% endif %}{{ exp.end_date or 'Present' }}
+                                            </td>
+                                        </tr>
+                                    </table>
+                                    {% if exp.bullets %}
+                                    <ul>
+                                        {% for bullet in exp.bullets %}
+                                            <li>{{ bullet }}</li>
+                                        {% endfor %}
+                                    </ul>
+                                    {% endif %}
+                                </div>
                             {% endfor %}
-                        </ul>
-                        {% endif %}
-                    </div>
-                {% endfor %}
-            </div>
+                        </div>
+                    </td>
+                </tr>
+            </table>
         {% endif %}
 
         {% if section == "education" and cv.education and cv.education|length > 0 %}
-            <h2>Education</h2>
-            <div class="section-content">
-                {% for edu in cv.education %}
-                    <div style="margin-bottom: 8px;">
-                        <table class="item-header-table">
-                            <tr>
-                                <td class="item-left">
-                                    <span class="item-title">{{ edu.institution }}</span>
-                                    {% if edu.degree %} - <span>{{ edu.degree }} {% if edu.field %}in {{ edu.field }}{% endif %}</span> {% endif %}
-                                </td>
-                                <td class="item-right">
-                                    {% if edu.start_date %}{{ edu.start_date }} - {% endif %}{{ edu.end_date | default('') }}
-                                </td>
-                            </tr>
-                        </table>
-                        {% if edu.gpa %}
-                            <div style="margin-top: 1px;"><strong>GPA:</strong> {{ edu.gpa }}</div>
-                        {% endif %}
-                        {% if edu.relevant_coursework and edu.relevant_coursework|length > 0 %}
-                            <div style="margin-top: 1px;">
-                                <strong>Relevant Coursework:</strong> {{ edu.relevant_coursework | join(', ') }}
-                            </div>
-                        {% endif %}
-                    </div>
-                {% endfor %}
-            </div>
+            <table class="section-block">
+                <tr>
+                    <td class="section-cell">
+                        <h2>Education</h2>
+                        <div class="section-content">
+                            {% for edu in cv.education %}
+                                <div class="cv-item-compact">
+                                    <table class="item-header-table">
+                                        <tr>
+                                            <td class="item-left">
+                                                <span class="item-title">{{ edu.institution }}</span>
+                                                {% if edu.degree %} - <span>{{ edu.degree }} {% if edu.field %}in {{ edu.field }}{% endif %}</span> {% endif %}
+                                            </td>
+                                            <td class="item-right">
+                                                {% if edu.start_date %}{{ edu.start_date }} - {% endif %}{{ edu.end_date | default('') }}
+                                            </td>
+                                        </tr>
+                                    </table>
+                                    {% if edu.gpa %}
+                                        <div style="margin-top: 1px;"><strong>GPA:</strong> {{ edu.gpa }}</div>
+                                    {% endif %}
+                                    {% if edu.relevant_coursework and edu.relevant_coursework|length > 0 %}
+                                        <div style="margin-top: 1px;">
+                                            <strong>Relevant Coursework:</strong> {{ edu.relevant_coursework | join(', ') }}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </td>
+                </tr>
+            </table>
+        {% endif %}
+
+        {% if section == "leadership" and cv.leadership_activities and cv.leadership_activities|length > 0 %}
+            <table class="section-block">
+                <tr>
+                    <td class="section-cell">
+                        <h2>Leadership &amp; Activity</h2>
+                        <div class="section-content">
+                            {% for act in cv.leadership_activities %}
+                                <div class="cv-item">
+                                    <table class="item-header-table">
+                                        <tr>
+                                            <td class="item-left">
+                                                <span class="item-title">{{ act.title }}</span>
+                                                {% if act.organization %} | <span class="item-subtitle">{{ act.organization }}</span> {% endif %}
+                                                {% if act.location %} - <span>{{ act.location }}</span> {% endif %}
+                                            </td>
+                                            <td class="item-right">
+                                                {% if act.start_date %}{{ act.start_date }} - {% endif %}{{ act.end_date or 'Present' }}
+                                            </td>
+                                        </tr>
+                                    </table>
+                                    {% if act.bullets %}
+                                    <ul>
+                                        {% for bullet in act.bullets %}
+                                            <li>{{ bullet }}</li>
+                                        {% endfor %}
+                                    </ul>
+                                    {% endif %}
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </td>
+                </tr>
+            </table>
         {% endif %}
 
         {% if section == "certifications" and cv.certifications and cv.certifications|length > 0 %}
-            <h2>Certifications</h2>
-            <div class="section-content">
-                <ul>
-                {% for cert in cv.certifications %}
-                    <li>
-                        <span class="item-title">{{ cert.name }}</span>
-                        {% if cert.issuer %} - {{ cert.issuer }}{% endif %}
-                        {% if cert.date %} ({{ cert.date }}){% endif %}
-                        {% if cert.credential_id %} [ID: {{ cert.credential_id }}]{% endif %}
-                    </li>
-                {% endfor %}
-                </ul>
-            </div>
+            <table class="section-block">
+                <tr>
+                    <td class="section-cell">
+                        <h2>Certifications</h2>
+                        <div class="section-content">
+                            <ul>
+                            {% for cert in cv.certifications %}
+                                <li>
+                                    {% if cert.safe_url %}
+                                        <a href="{{ cert.safe_url }}" class="cv-link item-title">{{ cert.name }}</a>
+                                    {% else %}
+                                        <span class="item-title">{{ cert.name }}</span>
+                                    {% endif %}
+                                    {% if cert.issuer %} - {{ cert.issuer }}{% endif %}
+                                    {% if cert.date %} ({{ cert.date }}){% endif %}
+                                    {% if cert.credential_id %} [ID: {{ cert.credential_id }}]{% endif %}
+                                </li>
+                            {% endfor %}
+                            </ul>
+                        </div>
+                    </td>
+                </tr>
+            </table>
         {% endif %}
 
         {% if section == "projects" and cv.projects and cv.projects|length > 0 %}
-            <h2>Projects</h2>
-            <div class="section-content">
-                {% for proj in cv.projects %}
-                    <div style="margin-bottom: 10px;">
-                        <table class="item-header-table">
-                            <tr>
-                                <td class="item-left">
-                                    <span class="item-title">{{ proj.name }}</span>
-                                    {% if proj.url %} | <a href="{{ proj.url }}" style="color: black; text-decoration: none;">{{ proj.url }}</a>{% endif %}
-                                </td>
-                            </tr>
-                        </table>
-                        {% if proj.description %}<p style="margin-top: 2px;">{{ proj.description }}</p>{% endif %}
-                        {% if proj.technologies and proj.technologies|length > 0 %}
-                        <p style="margin-top: 2px;"><strong>Technologies:</strong> {{ proj.technologies | join(', ') }}</p>
-                        {% endif %}
-                    </div>
-                {% endfor %}
-            </div>
+            <table class="section-block">
+                <tr>
+                    <td class="section-cell">
+                        <h2>Projects</h2>
+                        <div class="section-content">
+                            {% for proj in cv.projects %}
+                                <div class="cv-item">
+                                    <div class="item-header">
+                                        {% if proj.safe_url %}
+                                            <a href="{{ proj.safe_url }}" class="cv-link item-title">{{ proj.name }}</a>
+                                        {% else %}
+                                            <span class="item-title">{{ proj.name }}</span>
+                                        {% endif %}
+                                    </div>
+                                    {% if proj.description %}<p style="margin-top: 1px; margin-bottom: 1px;">{{ proj.description }}</p>{% endif %}
+                                    {% if proj.technologies and proj.technologies|length > 0 %}
+                                    <p style="margin-top: 1px; margin-bottom: 1px;"><strong>Technologies:</strong> {{ proj.technologies | join(', ') }}</p>
+                                    {% endif %}
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </td>
+                </tr>
+            </table>
+        {% endif %}
+
+        {% if section == "skills" and cv.skills and cv.skills|length > 0 %}
+            <table class="section-block">
+                <tr>
+                    <td class="section-cell">
+                        <h2>Technical Skills</h2>
+                        <div class="section-content">
+                            {% for group in cv.skills[:3] %}
+                                {% if group is mapping and group["items"] %}
+                                    <div class="skill-category-row">
+                                        <span class="item-title">{{ group["category"] }}:</span> {{ group["items"] | join(', ') }}
+                                    </div>
+                                {% elif group is string %}
+                                    <span class="skills-list">{{ group }}{% if not loop.last %}, {% endif %}</span>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                    </td>
+                </tr>
+            </table>
         {% endif %}
 
     {% endfor %}

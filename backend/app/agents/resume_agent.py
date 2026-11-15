@@ -45,10 +45,8 @@ def parse_with_llm_node(state: ResumeState) -> ResumeState:
     structured_llm = get_structured_llm(ResumeProfile, temperature=0)
     
     system_prompt = (
-        "You are an expert ATS (Applicant Tracking System) parser. "
-        "Your task is to extract information from the provided resume text and format it exactly "
-        "according to the schema. Extract all relevant details, skills, experiences, and education. "
-        "If some information is missing, leave the optional fields empty. Do not invent information."
+        "Extract resume text strictly into the `ResumeProfile` schema; never invent data and leave missing optional fields empty. "
+        "Put paid jobs/internships in `work_experiences`, and student clubs, teaching assistantships, or volunteer roles in `leadership_activities`."
     )
     
     messages = [

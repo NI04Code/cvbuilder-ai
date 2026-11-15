@@ -32,7 +32,7 @@ class Profile(Base):
     # ── Structured resume data (stored as JSONB for flexibility) ──────────
     personal_info: Mapped[dict | None] = mapped_column(
         JSONB, nullable=True
-    )  # name, email, phone, location, linkedin_url, portfolio_url
+    )  # name, email, phone, location, linkedin_url, portfolio_url, other_url
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     work_experiences: Mapped[list | None] = mapped_column(
         JSONB, nullable=True
@@ -40,12 +40,15 @@ class Profile(Base):
     education: Mapped[list | None] = mapped_column(
         JSONB, nullable=True
     )  # [{institution, degree, field, start_date, end_date, gpa}]
+    leadership_activities: Mapped[list | None] = mapped_column(
+        JSONB, nullable=True
+    )  # [{organization, title, start_date, end_date, location, bullets: [...]}]
     skills: Mapped[dict | None] = mapped_column(
         JSONB, nullable=True
     )  # {technical: [...], soft: [...], languages: [...], tools: [...]}
     certifications: Mapped[list | None] = mapped_column(
         JSONB, nullable=True
-    )  # [{name, issuer, date, credential_id}]
+    )  # [{name, issuer, date, credential_id, url}]
     projects: Mapped[list | None] = mapped_column(
         JSONB, nullable=True
     )  # [{name, description, technologies, url}]

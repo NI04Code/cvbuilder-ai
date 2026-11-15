@@ -1,4 +1,5 @@
 import os
+import re
 import shutil
 import uuid
 from pathlib import Path
@@ -59,9 +60,46 @@ async def save_upload_file(upload_file: UploadFile, user_id: str | uuid.UUID) ->
     return file_path
 
 
+def sanitize_filename_segment(value: str | None, default: str) -> str:
+    """Normalizes a text segment into a safe hyphen-delimited filename token."""
+    cleaned = re.sub(r"[^a-zA-Z0-9]+", "-", (value or "").strip()).strip("-")
+    return cleaned or default
+
+
+def build_cv_filename(
+    company: str | None,
+    user_name: str | None,
+    unique_code: str | None = None,
+) -> str:
+    """
+    Builds a standardized CV PDF filename:
+    - Stored file (with unique_code): cv-<company>-<user-name>-<uniquecode>.pdf
+    - Downloaded file (without unique_code): cv-<company>-<user-name>.pdf
+    """
+    company_part = sanitize_filename_segment(company, "Tailored")
+    name_part = sanitize_filename_segment(user_name, "Candidate")
+    parts = ["cv", company_part, name_part]
+    if unique_code:
+        code_part = sanitize_filename_segment(unique_code, uuid.uuid4().hex[:8])
+        parts.append(code_part)
+    return f"{'-'.join(parts)}.pdf"
+
+
 def get_generated_cv_path(user_id: str | uuid.UUID, filename: str) -> Path:
     """Returns a safe path for a generated CV."""
     safe_filename = "".join(c for c in filename if c.isalnum() or c in "._- ")
     user_dir = GENERATED_DIR / str(user_id)
     user_dir.mkdir(parents=True, exist_ok=True)
     return user_dir / safe_filename
+
+
+def delete_generated_cv_file(file_path: str | None, user_id: str | uuid.UUID) -> None:
+    """Safely delete a generated CV PDF only if it resides inside the user's generated directory."""
+    if not file_path:
+        return
+    user_dir = (GENERATED_DIR / str(user_id)).resolve()
+    target = Path(file_path).resolve()
+    if not target.is_relative_to(user_dir):
+        raise ValueError("Refusing to delete file outside user's generated directory.")
+    if target.is_file():
+        target.unlink()

@@ -1,10 +1,13 @@
 """API endpoints for generating and retrieving tailored CVs."""
 
 import asyncio
+import logging
+import os
 import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,8 +21,13 @@ from app.schemas.profile import ProfileResponse, PersonalInfo
 from app.security.jwt import get_current_user
 from app.security.rate_limiter import limiter
 from app.services.pdf_builder import generate_cv_pdf
-from app.utils.file_handler import get_generated_cv_path
+from app.utils.file_handler import (
+    build_cv_filename,
+    delete_generated_cv_file,
+    get_generated_cv_path,
+)
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/cv", tags=["CV Generation"])
 
 
@@ -50,7 +58,7 @@ async def generate_cv(
     profile_response = ProfileResponse.model_validate(profile)
     
     # 2. Run the LangGraph agent
-    result = await process_cv_generation(profile_response, data)
+    result = await process_cv_generation(profile_response, data, user_name=current_user.name)
     
     if result.get("error") or not result.get("tailored_cv"):
         raise HTTPException(
@@ -59,16 +67,22 @@ async def generate_cv(
         )
         
     tailored_cv = result["tailored_cv"]
-    
-    # 3. Generate PDF
-    cv_id = uuid.uuid4()
-    pdf_filename = f"CV_{data.company_name or 'Tailored'}_{cv_id}.pdf"
-    pdf_path = get_generated_cv_path(current_user.id, pdf_filename)
-    
-    # Needs personal info for the PDF header
+    resolved_company = data.company_name or result.get("resolved_company")
+
+    # Needs personal info for the PDF header and filename
     personal_info = profile_response.personal_info
     if not personal_info:
         personal_info = PersonalInfo(name=current_user.name or "Candidate")
+    user_name = personal_info.name or current_user.name or "Candidate"
+
+    # 3. Generate PDF (stored with unique code suffix)
+    cv_id = uuid.uuid4()
+    pdf_filename = build_cv_filename(
+        resolved_company,
+        user_name,
+        unique_code=cv_id.hex[:8],
+    )
+    pdf_path = get_generated_cv_path(current_user.id, pdf_filename)
         
     try:
         await asyncio.to_thread(generate_cv_pdf, tailored_cv, personal_info, str(pdf_path))
@@ -85,7 +99,7 @@ async def generate_cv(
         profile_id=profile.id,
         job_description=data.job_description,
         job_title=data.job_title,
-        company_name=data.company_name,
+        company_name=resolved_company,
         tailored_content=tailored_cv.model_dump(),
         pdf_file_path=str(pdf_path),
         ats_score=tailored_cv.ats_score,
@@ -139,9 +153,6 @@ async def get_cv(
     return CVResponse.model_validate(cv)
 
 
-import os
-from fastapi.responses import FileResponse
-
 @router.get(
     "/{cv_id}/download",
     summary="Download a generated CV as PDF",
@@ -151,7 +162,7 @@ async def download_cv(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> FileResponse:
-    """Returns the generated PDF file for the tailored CV."""
+    """Returns the generated PDF file for the tailored CV without the internal unique code in the filename."""
     result = await db.execute(
         select(GeneratedCV).where(GeneratedCV.id == cv_id, GeneratedCV.user_id == current_user.id)
     )
@@ -160,13 +171,53 @@ async def download_cv(
     if not cv:
         raise HTTPException(status_code=404, detail="CV not found")
         
-    if not os.path.exists(cv.pdf_file_path):
+    if not cv.pdf_file_path or not os.path.exists(cv.pdf_file_path):
         raise HTTPException(status_code=404, detail="PDF file not found on server")
-        
-    filename = os.path.basename(cv.pdf_file_path)
-    return FileResponse(
-        path=cv.pdf_file_path, 
-        filename=filename, 
-        media_type="application/pdf"
+
+    profile_result = await db.execute(
+        select(Profile).where(Profile.user_id == current_user.id)
     )
+    profile = profile_result.scalar_one_or_none()
+    profile_name = (
+        profile.personal_info.get("name")
+        if profile and isinstance(profile.personal_info, dict)
+        else None
+    )
+    user_name = profile_name or current_user.name or "Candidate"
+    download_filename = build_cv_filename(cv.company_name, user_name)
+
+    return FileResponse(
+        path=cv.pdf_file_path,
+        filename=download_filename,
+        media_type="application/pdf",
+    )
+
+
+@router.delete(
+    "/{cv_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete a generated CV and its stored PDF file",
+)
+async def delete_cv(
+    cv_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    """Deletes a generated CV record from the database and removes its PDF file from storage."""
+    result = await db.execute(
+        select(GeneratedCV).where(GeneratedCV.id == cv_id, GeneratedCV.user_id == current_user.id)
+    )
+    cv = result.scalar_one_or_none()
+
+    if not cv:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="CV not found")
+
+    pdf_file_path = cv.pdf_file_path
+    await db.delete(cv)
+    await db.commit()
+
+    try:
+        await asyncio.to_thread(delete_generated_cv_file, pdf_file_path, current_user.id)
+    except Exception as exc:
+        logger.error("Failed to remove PDF file for deleted CV %s: %s", cv_id, exc)
 
