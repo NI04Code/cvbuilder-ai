@@ -17,6 +17,7 @@ interface CVGenerationContextType {
   generatedCv: any;
   setFormData: React.Dispatch<React.SetStateAction<FormDataState>>;
   setError: React.Dispatch<React.SetStateAction<string | null>>;
+  clearGeneratedCvIfMatches: (cvId: string) => void;
   startGeneration: () => Promise<void>;
 }
 
@@ -48,8 +49,13 @@ export function CVGenerationProvider({ children }: { children: React.ReactNode }
   const startGeneration = useCallback(async () => {
     if (isGenerating) return;
 
-    if (!formData.job_description || formData.job_description.length < 50) {
+    const trimmedJd = formData.job_description.trim();
+    if (!trimmedJd || trimmedJd.length < 50) {
       setError("Please provide a more detailed job description (at least 50 characters).");
+      return;
+    }
+    if (trimmedJd.length > 2500) {
+      setError("Job description must be 2,500 characters or fewer.");
       return;
     }
 
@@ -74,6 +80,10 @@ export function CVGenerationProvider({ children }: { children: React.ReactNode }
     }
   }, [isGenerating, formData, session]);
 
+  const clearGeneratedCvIfMatches = useCallback((cvId: string) => {
+    setGeneratedCv((prev: any) => (prev?.id === cvId ? null : prev));
+  }, []);
+
   return (
     <CVGenerationContext.Provider
       value={{
@@ -83,6 +93,7 @@ export function CVGenerationProvider({ children }: { children: React.ReactNode }
         generatedCv,
         setFormData,
         setError,
+        clearGeneratedCvIfMatches,
         startGeneration,
       }}
     >

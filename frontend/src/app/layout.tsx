@@ -6,9 +6,21 @@ import { Providers } from "@/components/Providers";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "CVBuilder AI - ATS CV Generator",
-  description: "Generate personalized, ATS-optimized CVs from your resume and target job descriptions using AI.",
+  title: "CVBuilder — Role-Targeted ATS Resume Builder",
+  description: "Tailor your resume to any job description and check ATS compatibility.",
 };
+
+const themeInitScript = `
+(function() {
+  try {
+    var saved = localStorage.getItem('cvbuilder-theme');
+    var theme = (saved === 'light' || saved === 'dark')
+      ? saved
+      : (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    document.documentElement.setAttribute('data-theme', theme);
+  } catch (e) {}
+})();
+`;
 
 export default function RootLayout({
   children,
@@ -16,7 +28,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+      </head>
       <body className={inter.className}>
         <Providers>{children}</Providers>
       </body>

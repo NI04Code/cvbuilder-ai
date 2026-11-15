@@ -2,16 +2,21 @@
 
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
-import { FileSignature, Download, ArrowRight, Plus } from "lucide-react";
+import { FileSignature, Download, Plus, Target, Trash2, AlertCircle } from "lucide-react";
 import Link from "next/link";
-import { apiClient } from "@/lib/api";
+import { apiClient, extractDownloadFilename } from "@/lib/api";
+import { useCVGeneration } from "@/context/CVGenerationContext";
 import styles from "./page.module.css";
-import { motion } from "framer-motion";
 
 export default function DashboardPage() {
   const { data: session, status } = useSession();
+  const { clearGeneratedCvIfMatches } = useCVGeneration();
   const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchHistory() {
@@ -32,6 +37,8 @@ export default function DashboardPage() {
   }, [session, status]);
 
   const handleDownload = async (cvId: string, companyName: string) => {
+    if (downloadingId) return;
+    setDownloadingId(cvId);
     try {
       const token = (session as any)?.backendAccessToken;
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/cv/${cvId}/download`, {
@@ -42,107 +49,199 @@ export default function DashboardPage() {
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = `CV_${companyName || "Tailored"}.pdf`;
+        a.download = extractDownloadFilename(
+          res.headers.get("content-disposition"),
+          companyName,
+          session?.user?.name
+        );
         a.click();
         window.URL.revokeObjectURL(url);
       }
     } catch (err) {
       console.error("Download failed", err);
+    } finally {
+      setDownloadingId(null);
     }
   };
 
-  const firstName = session?.user?.name?.split(" ")[0] || "User";
+  const handleDelete = async (cvId: string) => {
+    if (deletingId) return;
+    setDeletingId(cvId);
+    setActionError(null);
+    try {
+      const token = (session as any)?.backendAccessToken;
+      await apiClient.delete(`/cv/${cvId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setHistory((prev) => prev.filter((item) => item.id !== cvId));
+      clearGeneratedCvIfMatches(cvId);
+      setConfirmDeleteId(null);
+    } catch (err: any) {
+      console.error("Delete failed", err);
+      setActionError(err.response?.data?.detail || "Failed to delete CV. Please try again.");
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   return (
     <div className={styles.container}>
-      {/* Header */}
       <header className={styles.header}>
         <div>
-          <h1 className={styles.title}>{firstName}&apos;s Dashboard</h1>
+          <h1 className={styles.title}>Tailored CVs</h1>
           <p className={styles.subtitle}>
-            {history.length > 0
-              ? `You have ${history.length} tailored CV${history.length > 1 ? "s" : ""}.`
-              : "Generate your first ATS-optimized CV to get started."}
+            {loading
+              ? "Loading your generated resumes…"
+              : history.length > 0
+                ? `${history.length} role-targeted resume${history.length > 1 ? "s" : ""} ready for download.`
+                : "Paste a job description to generate your first role-targeted PDF resume."}
           </p>
         </div>
-        <Link href="/generate" className={styles.generateBtn}>
-          <Plus size={18} />
-          Generate CV
-        </Link>
+        <div className={styles.headerActions}>
+          <Link href="/ats-checker" className={styles.secondaryBtn}>
+            <Target size={16} strokeWidth={1.75} />
+            <span>Check ATS Score</span>
+          </Link>
+          <Link href="/generate" className={styles.generateBtn}>
+            <Plus size={16} strokeWidth={2} />
+            <span>Tailor New CV</span>
+          </Link>
+        </div>
       </header>
 
-      {/* CV List */}
+      {actionError && (
+        <div className={styles.errorBanner} role="alert">
+          <AlertCircle size={16} strokeWidth={1.75} />
+          <span>{actionError}</span>
+        </div>
+      )}
+
       <section>
         {loading ? (
-          <div className={styles.loadingState}>
-            <div className={styles.spinner} />
-            <p>Loading your CVs...</p>
+          <div className={styles.skeletonList} aria-label="Loading CVs">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className={styles.skeletonRow}>
+                <div className={styles.skeletonLeft}>
+                  <div className={styles.skeletonTitle} />
+                  <div className={styles.skeletonSub} />
+                </div>
+                <div className={styles.skeletonRight}>
+                  <div className={styles.skeletonBadge} />
+                  <div className={styles.skeletonBtn} />
+                </div>
+              </div>
+            ))}
           </div>
         ) : history.length > 0 ? (
           <div className={styles.cvList}>
-            {/* Table header */}
-            <div className={styles.tableHeader}>
-              <span className={styles.colRole}>Role</span>
-              <span className={styles.colCompany}>Company</span>
-              <span className={styles.colAts}>ATS Score</span>
-              <span className={styles.colDate}>Date</span>
-              <span className={styles.colActions}></span>
-            </div>
+            {history.map((cv: any) => {
+              const score = cv.ats_score != null ? Math.round(cv.ats_score) : null;
+              const tier =
+                score != null
+                  ? score >= 80
+                    ? "high"
+                    : score >= 60
+                      ? "mid"
+                      : "low"
+                  : null;
+              const isDownloading = downloadingId === cv.id;
 
-            {/* CV Rows */}
-            {history.map((cv: any, idx: number) => (
-              <motion.div
-                key={cv.id}
-                className={styles.cvRow}
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: idx * 0.04 }}
-              >
-                <span className={styles.colRole}>
-                  <FileSignature size={16} className={styles.rowIcon} />
-                  {cv.job_title || "-"}
-                </span>
-                <span className={styles.colCompany}>{cv.company_name || "—"}</span>
-                <span className={styles.colAts}>
-                  {cv.ats_score != null ? (
-                    <span className={styles.atsBadge} data-score={cv.ats_score >= 80 ? "high" : cv.ats_score >= 60 ? "mid" : "low"}>
-                      {cv.ats_score}%
-                    </span>
-                  ) : (
-                    "—"
-                  )}
-                </span>
-                <span className={styles.colDate}>
-                  {new Date(cv.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                </span>
-                <span className={styles.colActions}>
-                  <button
-                    onClick={() => handleDownload(cv.id, cv.company_name)}
-                    className={styles.downloadBtn}
-                    title="Download PDF"
-                  >
-                    <Download size={16} />
-                  </button>
-                </span>
-              </motion.div>
-            ))}
+              return (
+                <div key={cv.id} className={styles.cvCard}>
+                  <div className={styles.cvPrimary}>
+                    <div className={styles.cvIconBox}>
+                      <FileSignature size={18} strokeWidth={1.75} />
+                    </div>
+                    <div className={styles.cvText}>
+                      <span className={styles.cvRole}>
+                        {cv.job_title || "Tailored Resume"}
+                      </span>
+                      <span className={styles.cvMeta}>
+                        {cv.company_name ? `${cv.company_name} · ` : ""}
+                        <time className={styles.cvDate}>
+                          {new Date(cv.created_at).toLocaleDateString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                            year: "numeric",
+                          })}
+                        </time>
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className={styles.cvRight}>
+                    {score != null && (
+                      <span className={styles.atsBadge} data-score={tier}>
+                        {score}% ATS
+                      </span>
+                    )}
+                    <button
+                      onClick={() => handleDownload(cv.id, cv.company_name)}
+                      className={styles.downloadBtn}
+                      disabled={isDownloading || deletingId === cv.id}
+                      title="Download PDF"
+                    >
+                      {isDownloading ? (
+                        <span className={styles.btnSpinner} />
+                      ) : (
+                        <Download size={15} strokeWidth={1.75} />
+                      )}
+                      <span>{isDownloading ? "Downloading…" : "PDF"}</span>
+                    </button>
+
+                    {confirmDeleteId === cv.id ? (
+                      <div className={styles.confirmGroup}>
+                        <button
+                          onClick={() => handleDelete(cv.id)}
+                          className={styles.confirmDeleteBtn}
+                          disabled={deletingId === cv.id}
+                          title="Confirm delete CV"
+                        >
+                          {deletingId === cv.id ? (
+                            <span className={styles.btnSpinner} />
+                          ) : (
+                            <span>Delete</span>
+                          )}
+                        </button>
+                        <button
+                          onClick={() => setConfirmDeleteId(null)}
+                          className={styles.cancelDeleteBtn}
+                          disabled={deletingId === cv.id}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setConfirmDeleteId(cv.id)}
+                        className={styles.deleteBtn}
+                        disabled={Boolean(deletingId)}
+                        title="Delete CV"
+                        aria-label={`Delete ${cv.job_title || "Tailored Resume"}`}
+                      >
+                        <Trash2 size={15} strokeWidth={1.75} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         ) : (
-          <motion.div
-            className={styles.emptyState}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-          >
-            <FileSignature size={48} className={styles.emptyIcon} />
-            <h3 className={styles.emptyTitle}>No CVs generated yet</h3>
+          <div className={styles.emptyState}>
+            <div className={styles.emptyIconBox}>
+              <FileSignature size={24} strokeWidth={1.75} />
+            </div>
+            <h2 className={styles.emptyTitle}>No tailored CVs yet</h2>
             <p className={styles.emptyDesc}>
-              Paste a job description and let AI tailor your profile into an ATS-optimized CV.
+              Paste a target job posting and we will align your work experience,
+              skills, and summary into a clean single-column PDF.
             </p>
-            <Link href="/generate" className={styles.emptyBtn}>
-              <Plus size={18} />
-              Generate Your First CV
+            <Link href="/generate" className={styles.generateBtn}>
+              <Plus size={16} strokeWidth={2} />
+              <span>Tailor Your First CV</span>
             </Link>
-          </motion.div>
+          </div>
         )}
       </section>
     </div>

@@ -12,13 +12,12 @@ import {
   AlertTriangle,
   ThumbsUp,
   TrendingUp,
+  Briefcase,
 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
 import { apiClient } from "@/lib/api";
 import { useIsInsideDashboard } from "@/context/CVGenerationContext";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import styles from "./page.module.css";
-
-// ── Types matching the backend ATSCheckResult schema ────────────────────
 
 interface ATSSectionScore {
   section_name: string;
@@ -44,6 +43,7 @@ interface ATSFormattingIssue {
 interface ATSCheckResult {
   overall_score: number;
   candidate_level: string;
+  target_role?: string | null;
   sections: ATSSectionScore[];
   keyword_analysis: ATSKeywordAnalysis;
   formatting_issues: ATSFormattingIssue[];
@@ -52,23 +52,25 @@ interface ATSCheckResult {
   summary: string;
 }
 
-// ── Score Gauge Component ───────────────────────────────────────────────
-
 function ScoreGauge({ score }: { score: number }) {
-  const radius = 65;
+  const radius = 58;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (score / 100) * circumference;
 
   const color =
-    score >= 80 ? "#34d399" : score >= 60 ? "#fbbf24" : "#f87171";
+    score >= 80
+      ? "var(--success)"
+      : score >= 60
+        ? "var(--warning)"
+        : "var(--danger)";
 
   return (
     <div className={styles.gaugeContainer}>
-      <svg width="160" height="160" className={styles.gaugeSvg}>
-        <circle cx="80" cy="80" r={radius} className={styles.gaugeTrack} />
+      <svg width="144" height="144" className={styles.gaugeSvg}>
+        <circle cx="72" cy="72" r={radius} className={styles.gaugeTrack} />
         <circle
-          cx="80"
-          cy="80"
+          cx="72"
+          cy="72"
           r={radius}
           className={styles.gaugeFill}
           stroke={color}
@@ -80,18 +82,16 @@ function ScoreGauge({ score }: { score: number }) {
         <div className={styles.gaugeNumber} style={{ color }}>
           {score}
         </div>
-        <div className={styles.gaugeLabel}>ATS Score</div>
+        <div className={styles.gaugeLabel}>/ 100</div>
       </div>
     </div>
   );
 }
 
-// ── Score color helper ──────────────────────────────────────────────────
-
 function scoreColor(score: number) {
-  if (score >= 80) return "#34d399";
-  if (score >= 60) return "#fbbf24";
-  return "#f87171";
+  if (score >= 80) return "var(--success)";
+  if (score >= 60) return "var(--warning)";
+  return "var(--danger)";
 }
 
 function scoreTier(score: number): "high" | "mid" | "low" {
@@ -100,17 +100,14 @@ function scoreTier(score: number): "high" | "mid" | "low" {
   return "low";
 }
 
-// ── Main Page Component ─────────────────────────────────────────────────
-
 export default function ATSCheckerPage() {
   const isDashboard = useIsInsideDashboard();
   const [isDragging, setIsDragging] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [targetRole, setTargetRole] = useState("");
   const [result, setResult] = useState<ATSCheckResult | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // ── Upload handlers ─────────────────────────────────────────────
 
   const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -143,6 +140,9 @@ export default function ATSCheckerPage() {
 
     const formData = new FormData();
     formData.append("file", file);
+    if (targetRole.trim()) {
+      formData.append("target_role", targetRole.trim());
+    }
 
     try {
       const response = await apiClient.post("/ats-checker/analyze", formData, {
@@ -166,65 +166,74 @@ export default function ATSCheckerPage() {
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  // ── Render ──────────────────────────────────────────────────────
-
   return (
     <div className={isDashboard ? styles.dashboardContainer : styles.container}>
-      {/* Nav (public view only) */}
       {!isDashboard && (
-        <nav className={styles.nav}>
+        <header className={styles.nav}>
           <Link href="/" className={styles.logo}>
-            <FileText size={24} className={styles.logoIcon} />
-            CVBuilder <span className="gradient-text">AI</span>
+            <FileText size={20} strokeWidth={1.75} className={styles.logoIcon} />
+            <span>CVBuilder</span>
+            <span className={styles.logoTag}>ATS</span>
           </Link>
           <div className={styles.navLinks}>
+            <ThemeToggle />
             <Link href="/login" className={styles.navLink}>
               Sign In
             </Link>
           </div>
-        </nav>
+        </header>
       )}
 
-      {/* Main */}
       <div className={isDashboard ? styles.dashboardMain : styles.main}>
         <header className={isDashboard ? styles.dashboardHeader : styles.header}>
-          <h1 className={isDashboard ? styles.dashboardTitle : styles.title}>
-            {isDashboard ? (
-              "ATS Checker"
-            ) : (
-              <>
-                Free <span className="gradient-text">ATS Checker</span>
-              </>
-            )}
-          </h1>
-          <p className={isDashboard ? styles.dashboardSubtitle : styles.subtitle}>
-            {isDashboard
-              ? "Upload your CV and get an instant, detailed ATS compatibility report."
-              : "Upload your CV and get an instant, detailed ATS compatibility report — no sign-up required."}
-          </p>
+          <div>
+            <h1 className={isDashboard ? styles.dashboardTitle : styles.title}>
+              {isDashboard
+                ? "ATS Compatibility Checker"
+                : "Check your resume's ATS parse rate & keyword coverage"}
+            </h1>
+            <p className={isDashboard ? styles.dashboardSubtitle : styles.subtitle}>
+              {isDashboard
+                ? "Upload any PDF resume to evaluate section weights, keyword density, and formatting issues."
+                : "Upload a PDF resume for an instant section-by-section grading calibrated to your career level."}
+            </p>
+          </div>
+          {result && (
+            <button className={styles.resetBtn} onClick={reset}>
+              <RotateCcw size={15} strokeWidth={1.75} />
+              <span>Check Another Resume</span>
+            </button>
+          )}
         </header>
 
-        {/* Error */}
-        <AnimatePresence>
-          {error && (
-            <motion.div
-              className={styles.errorMsg}
-              initial={{ opacity: 0, y: -8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-            >
-              <AlertCircle size={20} />
-              {error}
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {error && (
+          <div className={styles.errorMsg}>
+            <AlertCircle size={18} strokeWidth={1.75} />
+            <span>{error}</span>
+          </div>
+        )}
 
-        {/* Upload / Loading / Results */}
         {!result && !isAnalyzing && (
-          <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-          >
+          <div className={styles.uploadWrapper}>
+            <div className={styles.targetRoleBox}>
+              <label htmlFor="ats-target-role" className={styles.targetRoleLabel}>
+                <Briefcase size={15} strokeWidth={1.75} className={styles.targetRoleIcon} />
+                <span>Target Job Role</span>
+                <span className={styles.targetRoleOptional}>(Optional)</span>
+              </label>
+              <input
+                id="ats-target-role"
+                type="text"
+                maxLength={120}
+                value={targetRole}
+                onChange={(e) => setTargetRole(e.target.value)}
+                placeholder="e.g., Senior Backend Engineer, CPA Accountant, Registered Nurse"
+                className={styles.targetRoleInput}
+              />
+              <p className={styles.targetRoleHint}>
+                Grades credential strength, experience fit, and missing keywords against this role. Leave blank to auto-detect from your CV.
+              </p>
+            </div>
             <div
               className={`${styles.uploadZone} ${isDragging ? styles.uploadZoneDragging : ""}`}
               onDragOver={handleDragOver}
@@ -232,14 +241,16 @@ export default function ATSCheckerPage() {
               onDrop={handleDrop}
               onClick={() => fileInputRef.current?.click()}
             >
-              <UploadCloud size={48} className={styles.uploadIcon} />
+              <div className={styles.uploadIconBox}>
+                <UploadCloud size={26} strokeWidth={1.75} />
+              </div>
               <p className={styles.uploadTitle}>
-                Drop your CV here or click to browse
+                Drop your PDF resume here or click to browse
               </p>
-              <p className={styles.uploadDesc}>PDF files only, up to 10 MB</p>
-              <p className={styles.uploadHint}>
-                Your file is processed in memory and never stored on our servers.
+              <p className={styles.uploadDesc}>
+                Single or multi-page PDF up to 10 MB · Processed in memory and never stored
               </p>
+              <span className={styles.uploadCta}>Select PDF Resume</span>
               <input
                 ref={fileInputRef}
                 type="file"
@@ -248,63 +259,54 @@ export default function ATSCheckerPage() {
                 hidden
               />
             </div>
-          </motion.div>
+          </div>
         )}
 
         {isAnalyzing && (
-          <motion.div
-            className={styles.loadingState}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-          >
+          <div className={styles.loadingState}>
             <div className={styles.spinner} />
-            <p className={styles.loadingText}>Analyzing your CV…</p>
+            <p className={styles.loadingText}>Grading your resume against ATS criteria…</p>
             <p className={styles.loadingHint}>
-              Evaluating formatting, keywords, section quality, and ATS
-              compatibility.
+              Checking text extractability, career-level section weights, and domain keyword density.
             </p>
-          </motion.div>
+          </div>
         )}
 
         {result && (
-          <motion.div
-            className={styles.results}
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-          >
-            {/* Reset */}
-            <button className={styles.resetBtn} onClick={reset}>
-              <RotateCcw size={16} />
-              Check another CV
-            </button>
-
-            {/* Overall Score */}
-            <div className={`${styles.scoreOverview} glass-card`}>
+          <div className={styles.results}>
+            {/* Overall Score Card */}
+            <div className={styles.scoreOverview}>
               <ScoreGauge score={result.overall_score} />
               <div className={styles.overviewInfo}>
-                <span className={styles.overviewLevel}>
-                  {result.candidate_level}
-                </span>
+                <div className={styles.overviewMetaRow}>
+                  <span className={styles.overviewLevel}>
+                    {result.candidate_level}
+                  </span>
+                  {result.target_role && (
+                    <span className={styles.targetRoleBadge}>
+                      Target: {result.target_role}
+                    </span>
+                  )}
+                  <span
+                    className={styles.densityBadge}
+                    data-rating={result.keyword_analysis.keyword_density_rating}
+                  >
+                    Keyword Density: {result.keyword_analysis.keyword_density_rating}
+                  </span>
+                </div>
                 <p className={styles.overviewSummary}>{result.summary}</p>
               </div>
             </div>
 
             {/* Section Breakdown */}
-            <div>
+            <section className={styles.blockSection}>
               <h2 className={styles.sectionTitle}>
-                <BarChart3 size={22} className={styles.sectionTitleIcon} />
-                Section Breakdown
+                <BarChart3 size={19} strokeWidth={1.75} className={styles.sectionTitleIcon} />
+                <span>Section Breakdown</span>
               </h2>
               <div className={styles.sectionsGrid}>
                 {result.sections.map((section, idx) => (
-                  <motion.div
-                    key={section.section_name}
-                    className={`${styles.sectionCard} glass-card`}
-                    initial={{ opacity: 0, y: 12 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: idx * 0.05 }}
-                  >
+                  <div key={`${section.section_name}-${idx}`} className={styles.sectionCard}>
                     <div className={styles.sectionCardHeader}>
                       <span className={styles.sectionCardName}>
                         {section.section_name}
@@ -327,7 +329,7 @@ export default function ATSCheckerPage() {
                     </div>
                     <span className={styles.sectionCardWeight}>
                       Weight: {Math.round(section.weight * 100)}%
-                      {!section.present && " · Not detected"}
+                      {!section.present && " · Missing from resume"}
                     </span>
                     <p className={styles.sectionCardFeedback}>
                       {section.feedback}
@@ -339,78 +341,69 @@ export default function ATSCheckerPage() {
                         ))}
                       </ul>
                     )}
-                  </motion.div>
+                  </div>
                 ))}
               </div>
-            </div>
+            </section>
 
             {/* Keyword Analysis */}
-            <div className={`${styles.keywordSection} glass-card`}>
+            <section className={styles.keywordSection}>
               <h2 className={styles.sectionTitle}>
-                <Search size={22} className={styles.sectionTitleIcon} />
-                Keyword Analysis
+                <Search size={19} strokeWidth={1.75} className={styles.sectionTitleIcon} />
+                <span>Keyword Coverage</span>
               </h2>
               <div className={styles.keywordColumns}>
                 <div className={styles.keywordColumn}>
-                  <h4>Detected Keywords</h4>
+                  <h3 className={styles.keywordSubheading}>
+                    Detected Keywords ({result.keyword_analysis.detected_keywords.length})
+                  </h3>
                   <div className={styles.keywordTags}>
                     {result.keyword_analysis.detected_keywords.length > 0 ? (
-                      result.keyword_analysis.detected_keywords.map((kw) => (
+                      result.keyword_analysis.detected_keywords.map((kw, idx) => (
                         <span
-                          key={kw}
+                          key={`detected-${kw}-${idx}`}
                           className={`${styles.keywordTag} ${styles.keywordTagPresent}`}
                         >
                           {kw}
                         </span>
                       ))
                     ) : (
-                      <span style={{ color: "#64748b", fontSize: "0.85rem" }}>
-                        No significant keywords detected
+                      <span className={styles.emptyNotice}>
+                        No domain keywords detected
                       </span>
                     )}
                   </div>
                 </div>
                 <div className={styles.keywordColumn}>
-                  <h4>Suggested Missing Keywords</h4>
+                  <h3 className={styles.keywordSubheading}>
+                    Recommended Additions ({result.keyword_analysis.missing_common_keywords.length})
+                  </h3>
                   <div className={styles.keywordTags}>
-                    {result.keyword_analysis.missing_common_keywords.length >
-                    0 ? (
-                      result.keyword_analysis.missing_common_keywords.map(
-                        (kw) => (
-                          <span
-                            key={kw}
-                            className={`${styles.keywordTag} ${styles.keywordTagMissing}`}
-                          >
-                            {kw}
-                          </span>
-                        )
-                      )
+                    {result.keyword_analysis.missing_common_keywords.length > 0 ? (
+                      result.keyword_analysis.missing_common_keywords.map((kw, idx) => (
+                        <span
+                          key={`missing-${kw}-${idx}`}
+                          className={`${styles.keywordTag} ${styles.keywordTagMissing}`}
+                        >
+                          {kw}
+                        </span>
+                      ))
                     ) : (
-                      <span style={{ color: "#64748b", fontSize: "0.85rem" }}>
-                        Great keyword coverage!
+                      <span className={styles.emptyNotice}>
+                        Strong domain keyword coverage
                       </span>
                     )}
                   </div>
                 </div>
               </div>
-              <span
-                className={styles.densityBadge}
-                data-rating={result.keyword_analysis.keyword_density_rating}
-              >
-                Keyword Density:{" "}
-                {result.keyword_analysis.keyword_density_rating}
-              </span>
-            </div>
+            </section>
 
             {/* Formatting Issues */}
             {result.formatting_issues.length > 0 && (
-              <div className={`${styles.formattingSection} glass-card`}>
+              <section className={styles.formattingSection}>
                 <h2 className={styles.sectionTitle}>
-                  <AlertTriangle
-                    size={22}
-                    className={styles.sectionTitleIcon}
-                  />
-                  Formatting Issues
+                  <AlertTriangle size={19} strokeWidth={1.75} className={styles.sectionTitleIcon} />
+                  <span>Formatting & Parseability Issues</span>
                 </h2>
                 <div className={styles.issuesList}>
                   {result.formatting_issues.map((issue, i) => (
@@ -428,15 +421,15 @@ export default function ATSCheckerPage() {
                     </div>
                   ))}
                 </div>
-              </div>
+              </section>
             )}
 
-            {/* Strengths & Improvements */}
+            {/* Strengths & Priority Improvements */}
             <div className={styles.twoColumnCards}>
-              <div className={`${styles.listCard} glass-card`}>
+              <div className={styles.listCard}>
                 <h3 className={styles.listCardTitle}>
-                  <ThumbsUp size={18} style={{ color: "#34d399" }} />
-                  Strengths
+                  <ThumbsUp size={17} strokeWidth={1.75} className={styles.iconSuccess} />
+                  <span>Key Strengths</span>
                 </h3>
                 <ul className={styles.listCardItems}>
                   {result.strengths.map((s, i) => (
@@ -446,10 +439,10 @@ export default function ATSCheckerPage() {
                   ))}
                 </ul>
               </div>
-              <div className={`${styles.listCard} glass-card`}>
+              <div className={styles.listCard}>
                 <h3 className={styles.listCardTitle}>
-                  <TrendingUp size={18} style={{ color: "#fbbf24" }} />
-                  Improvements
+                  <TrendingUp size={17} strokeWidth={1.75} className={styles.iconWarning} />
+                  <span>Priority Fixes</span>
                 </h3>
                 <ul className={styles.listCardItems}>
                   {result.improvements.map((s, i) => (
@@ -460,10 +453,9 @@ export default function ATSCheckerPage() {
                 </ul>
               </div>
             </div>
-          </motion.div>
+          </div>
         )}
       </div>
     </div>
   );
 }
-
