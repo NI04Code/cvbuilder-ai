@@ -68,3 +68,6 @@ class Profile(Base):
     generated_cvs: Mapped[list["GeneratedCV"]] = relationship(  # type: ignore[name-defined]
         back_populates="profile", lazy="selectin"
     )
+    generated_cover_letters: Mapped[list["GeneratedCoverLetter"]] = relationship(  # type: ignore[name-defined]
+        back_populates="profile", lazy="selectin"
+    )

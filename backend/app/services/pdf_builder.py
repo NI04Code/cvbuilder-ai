@@ -126,6 +126,19 @@ def _prepare_cv_context(cv: TailoredCV) -> dict:
     return data
 
 
+def _render_story_to_pdf_doc(html_out: str, margin_pt: float = 57.6) -> pymupdf.Document:
+    """Render HTML into an A4 PyMuPDF document with clickable hyperlink annotations."""
+    archive, user_css = _build_font_archive()
+    story = pymupdf.Story(html=html_out, user_css=user_css, archive=archive)
+    mediabox = pymupdf.paper_rect("a4")
+    content_rect = mediabox + (margin_pt, margin_pt, -margin_pt, -margin_pt)
+
+    def rectfn(rect_num: int, filled: pymupdf.Rect) -> tuple[pymupdf.Rect, pymupdf.Rect, None]:
+        return mediabox, content_rect, None
+
+    return story.write_with_links(rectfn)
+
+
 def generate_cv_pdf(cv: TailoredCV, personal_info: PersonalInfo, output_path: str) -> str:
     env = Environment(loader=FileSystemLoader(TEMPLATE_DIR), autoescape=True)
     template = env.get_template("cv_template.html")
@@ -137,21 +150,73 @@ def generate_cv_pdf(cv: TailoredCV, personal_info: PersonalInfo, output_path: st
         header_items=_build_header_items(personal_info),
     )
 
-    # Convert HTML to PDF with clickable hyperlink annotations using PyMuPDF Story
-    # (A4 page with 0.8 inch / 57.6pt margins).
-    archive, user_css = _build_font_archive()
-    story = pymupdf.Story(html=html_out, user_css=user_css, archive=archive)
-    mediabox = pymupdf.paper_rect("a4")
-    margin = 57.6  # 0.8 in * 72 pt/in
-    content_rect = mediabox + (margin, margin, -margin, -margin)
-
-    def rectfn(rect_num: int, filled: pymupdf.Rect) -> tuple[pymupdf.Rect, pymupdf.Rect, None]:
-        return mediabox, content_rect, None
-
-    pdf_doc = story.write_with_links(rectfn)
+    pdf_doc = _render_story_to_pdf_doc(html_out, margin_pt=57.6)
     try:
         pdf_doc.save(output_path)
     finally:
         pdf_doc.close()
+
+    return output_path
+
+
+def _split_letter_paragraphs(cover_letter_text: str) -> list[list[str]]:
+    """Split cover letter plain text into paragraphs, preserving intentional single line breaks."""
+    blocks = [block.strip() for block in re.split(r"\n\s*\n", cover_letter_text.strip()) if block.strip()]
+    return [[line.strip() for line in block.split("\n") if line.strip()] for block in blocks]
+
+
+def generate_cover_letter_pdf(
+    cover_letter_text: str,
+    personal_info: PersonalInfo,
+    output_path: str,
+    job_title: str | None = None,
+    company_name: str | None = None,
+) -> str:
+    """
+    Render a concise cover letter PDF strictly capped to 1 A4 page.
+    Automatically steps down font/spacing presets if needed and trims overflow pages as a final guard.
+    """
+    env = Environment(loader=FileSystemLoader(TEMPLATE_DIR), autoescape=True)
+    template = env.get_template("cover_letter_template.html")
+
+    personal_dict = personal_info.model_dump()
+    header_items = _build_header_items(personal_info)
+    paragraphs = _split_letter_paragraphs(cover_letter_text)
+    date_str = datetime.now().strftime("%B %d, %Y").replace(" 0", " ")
+
+    # Progressive presets from comfortable 10pt -> compact 9pt to guarantee 1 A4 page fit
+    layout_presets = (
+        {"font_size_pt": 10.5, "line_height": 1.38, "paragraph_gap_pt": 10, "margin_pt": 57.6},
+        {"font_size_pt": 10.0, "line_height": 1.30, "paragraph_gap_pt": 8, "margin_pt": 50.4},
+        {"font_size_pt": 9.5, "line_height": 1.24, "paragraph_gap_pt": 7, "margin_pt": 46.0},
+        {"font_size_pt": 9.0, "line_height": 1.20, "paragraph_gap_pt": 6, "margin_pt": 42.0},
+    )
+
+    selected_doc: pymupdf.Document | None = None
+    for idx, preset in enumerate(layout_presets):
+        html_out = template.render(
+            personal_info=personal_dict,
+            header_items=header_items,
+            date_str=date_str,
+            job_title=job_title,
+            company_name=company_name,
+            paragraphs=paragraphs,
+            font_size_pt=preset["font_size_pt"],
+            line_height=preset["line_height"],
+            paragraph_gap_pt=preset["paragraph_gap_pt"],
+        )
+        candidate_doc = _render_story_to_pdf_doc(html_out, margin_pt=preset["margin_pt"])
+        if len(candidate_doc) <= 1 or idx == len(layout_presets) - 1:
+            selected_doc = candidate_doc
+            break
+        candidate_doc.close()
+
+    assert selected_doc is not None
+    try:
+        if len(selected_doc) > 1:
+            selected_doc.delete_pages(from_page=1, to_page=len(selected_doc) - 1)
+        selected_doc.save(output_path)
+    finally:
+        selected_doc.close()
 
     return output_path

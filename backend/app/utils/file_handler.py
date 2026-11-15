@@ -66,35 +66,51 @@ def sanitize_filename_segment(value: str | None, default: str) -> str:
     return cleaned or default
 
 
-def build_cv_filename(
+def build_document_filename(
+    prefix: str,
     company: str | None,
     user_name: str | None,
     unique_code: str | None = None,
 ) -> str:
     """
-    Builds a standardized CV PDF filename:
-    - Stored file (with unique_code): cv-<company>-<user-name>-<uniquecode>.pdf
-    - Downloaded file (without unique_code): cv-<company>-<user-name>.pdf
+    Builds a standardized generated document PDF filename:
+    <prefix>-<company>-<user-name>[-<uniquecode>].pdf
+    (e.g. prefix="cv", "cover-letter", or future document types).
     """
+    prefix_part = sanitize_filename_segment(prefix, "document").lower()
     company_part = sanitize_filename_segment(company, "Tailored")
     name_part = sanitize_filename_segment(user_name, "Candidate")
-    parts = ["cv", company_part, name_part]
+    parts = [prefix_part, company_part, name_part]
     if unique_code:
         code_part = sanitize_filename_segment(unique_code, uuid.uuid4().hex[:8])
         parts.append(code_part)
     return f"{'-'.join(parts)}.pdf"
 
 
-def get_generated_cv_path(user_id: str | uuid.UUID, filename: str) -> Path:
-    """Returns a safe path for a generated CV."""
+def build_cv_filename(
+    company: str | None,
+    user_name: str | None,
+    unique_code: str | None = None,
+) -> str:
+    """Builds a standardized CV PDF filename: cv-<company>-<user-name>[-<uniquecode>].pdf."""
+    return build_document_filename("cv", company, user_name, unique_code=unique_code)
+
+
+def get_generated_document_path(user_id: str | uuid.UUID, filename: str) -> Path:
+    """Returns a safe storage path inside the user's generated documents directory."""
     safe_filename = "".join(c for c in filename if c.isalnum() or c in "._- ")
     user_dir = GENERATED_DIR / str(user_id)
     user_dir.mkdir(parents=True, exist_ok=True)
     return user_dir / safe_filename
 
 
-def delete_generated_cv_file(file_path: str | None, user_id: str | uuid.UUID) -> None:
-    """Safely delete a generated CV PDF only if it resides inside the user's generated directory."""
+def get_generated_cv_path(user_id: str | uuid.UUID, filename: str) -> Path:
+    """Alias for get_generated_document_path preserved for existing CV callers."""
+    return get_generated_document_path(user_id, filename)
+
+
+def delete_generated_document_file(file_path: str | None, user_id: str | uuid.UUID) -> None:
+    """Safely delete a generated PDF only if it resides inside the user's generated directory."""
     if not file_path:
         return
     user_dir = (GENERATED_DIR / str(user_id)).resolve()
@@ -103,3 +119,8 @@ def delete_generated_cv_file(file_path: str | None, user_id: str | uuid.UUID) ->
         raise ValueError("Refusing to delete file outside user's generated directory.")
     if target.is_file():
         target.unlink()
+
+
+def delete_generated_cv_file(file_path: str | None, user_id: str | uuid.UUID) -> None:
+    """Alias for delete_generated_document_file preserved for existing CV callers."""
+    delete_generated_document_file(file_path, user_id)

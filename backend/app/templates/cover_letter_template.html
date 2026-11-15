@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ personal_info.name }} - Cover Letter</title>
+    <style>
+        body {
+            font-family: 'Calibri', 'Arial', 'Helvetica', sans-serif;
+            font-size: {{ font_size_pt }}pt;
+            line-height: {{ line_height }};
+            color: #000;
+            margin: 0;
+            padding: 0;
+        }
+
+        h1 {
+            font-size: 18pt;
+            text-align: center;
+            margin-top: 0;
+            margin-bottom: 3px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .contact-info {
+            text-align: center;
+            font-size: 9.5pt;
+            margin-bottom: 14px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #000;
+        }
+
+        .contact-item {
+            margin: 0 5px;
+        }
+
+        .cv-link {
+            color: #000;
+            text-decoration: underline;
+        }
+
+        .letter-meta {
+            margin-bottom: 12px;
+            font-size: {{ font_size_pt }}pt;
+        }
+
+        .letter-date {
+            margin-bottom: 4px;
+            color: #222;
+        }
+
+        .letter-subject {
+            font-weight: bold;
+        }
+
+        .letter-paragraph {
+            margin-top: 0;
+            margin-bottom: {{ paragraph_gap_pt }}pt;
+            text-align: left;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>{{ personal_info.name }}</h1>
+        {% if header_items %}
+        <div class="contact-info">
+            {% for item in header_items %}
+            <span class="contact-item">{% if item.href %}<a class="cv-link" href="{{ item.href }}">{{ item.label }}</a>{% else %}{{ item.label }}{% endif %}</span>{% if not loop.last %} | {% endif %}
+            {% endfor %}
+        </div>
+        {% endif %}
+    </header>
+
+    <div class="letter-meta">
+        <div class="letter-date">{{ date_str }}</div>
+        {% if job_title or company_name %}
+        <div class="letter-subject">
+            Re: Application{% if job_title %} for {{ job_title }}{% endif %}{% if company_name %} at {{ company_name }}{% endif %}
+        </div>
+        {% endif %}
+    </div>
+
+    <main>
+        {% for lines in paragraphs %}
+        <p class="letter-paragraph">
+            {% for line in lines %}{{ line }}{% if not loop.last %}<br>{% endif %}{% endfor %}
+        </p>
+        {% endfor %}
+    </main>
+</body>
+</html>
+

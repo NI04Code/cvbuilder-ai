@@ -6,6 +6,11 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
+from app.schemas.document import (
+    JOB_DESCRIPTION_MAX_LENGTH,
+    JOB_DESCRIPTION_MIN_LENGTH,
+    JobTargetedRequest,
+)
 from app.schemas.profile import Certification, Education, LeadershipActivity, Project
 
 SectionKey = Literal[
@@ -32,21 +37,7 @@ DEFAULT_SECTION_ORDER: list[SectionKey] = [
 # ── Request Schemas ───────────────────────────────────────────────────────
 
 
-JOB_DESCRIPTION_MIN_LENGTH = 50
-JOB_DESCRIPTION_MAX_LENGTH = 2500
-
-
-class CVGenerateRequest(BaseModel):
-    """Request to generate a tailored ATS CV."""
-
-    job_description: str = Field(
-        ...,
-        min_length=JOB_DESCRIPTION_MIN_LENGTH,
-        max_length=JOB_DESCRIPTION_MAX_LENGTH,
-        description="Full job description text (50–2500 characters)",
-    )
-    job_title: str | None = Field(None, max_length=255, description="Target job title")
-    company_name: str | None = Field(None, max_length=255, description="Target company")
+CVGenerateRequest = JobTargetedRequest
 
 
 # ── Tailored CV content (LLM output) ─────────────────────────────────────

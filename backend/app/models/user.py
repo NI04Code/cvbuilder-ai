@@ -48,6 +48,9 @@ class User(Base):
     generated_cvs: Mapped[list["GeneratedCV"]] = relationship(  # type: ignore[name-defined]
         back_populates="user", cascade="all, delete-orphan", lazy="selectin"
     )
+    generated_cover_letters: Mapped[list["GeneratedCoverLetter"]] = relationship(  # type: ignore[name-defined]
+        back_populates="user", cascade="all, delete-orphan", lazy="selectin"
+    )
 
 
 class OAuthAccount(Base):
