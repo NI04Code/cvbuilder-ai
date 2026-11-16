@@ -1,18 +1,15 @@
+"""LangGraph orchestrator for resume PDF parsing into user profiles."""
+
 import asyncio
-import logging
 from typing import TypedDict
 
-import pymupdf as fitz  # PyMuPDF
-from langchain_core.messages import SystemMessage, HumanMessage
-from langgraph.graph import StateGraph, END
+from langgraph.graph import END, StateGraph
 
-from app.agents.llm import get_structured_llm
-from app.config import settings
+from app.agents.node.pdf_extract_node import extract_resume_pdf_text_node
+from app.agents.node.resume_parsing_node import parse_with_llm_node
 from app.schemas.profile import ResumeProfile
 
-logger = logging.getLogger(__name__)
 
-# State definition
 class ResumeState(TypedDict):
     file_path: str
     raw_text: str
@@ -20,81 +17,42 @@ class ResumeState(TypedDict):
     error: str | None
 
 
-def extract_text_node(state: ResumeState) -> ResumeState:
-    """Extracts text from the PDF file using PyMuPDF."""
-    logger.info(f"Extracting text from {state['file_path']}")
-    text = ""
-    try:
-        with fitz.open(state["file_path"]) as doc:
-            for page in doc:
-                text += page.get_text()
-        
-        if not text.strip():
-            return {**state, "error": "Could not extract text from PDF."}
-            
-        return {**state, "raw_text": text}
-    except Exception as e:
-        logger.error(f"Error extracting text: {e}")
-        return {**state, "error": f"Failed to extract text: {str(e)}"}
-
-
-def parse_with_llm_node(state: ResumeState) -> ResumeState:
-    """Parses the raw text into a structured profile using Gemini."""
-    logger.info("Parsing text with Gemini")
-    
-    structured_llm = get_structured_llm(ResumeProfile, temperature=0)
-    
-    system_prompt = (
-        "Extract resume text strictly into the `ResumeProfile` schema; never invent data and leave missing optional fields empty. "
-        "Put paid jobs/internships in `work_experiences`, and student clubs, teaching assistantships, or volunteer roles in `leadership_activities`."
-    )
-    
-    messages = [
-        SystemMessage(content=system_prompt),
-        HumanMessage(content=f"Resume Text:\n\n{state['raw_text']}")
-    ]
-    
-    try:
-        parsed_profile = structured_llm.invoke(messages)
-        return {**state, "parsed_profile": parsed_profile}
-    except Exception as e:
-        logger.error(f"Error parsing with LLM: {e}")
-        return {**state, "error": f"Failed to parse resume with AI: {str(e)}"}
-
-
 def router(state: ResumeState) -> str:
-    """Routes the graph based on the presence of errors."""
-    if state.get("error"):
-        return END
-    if not state.get("raw_text"):
+    """Route to LLM parsing only if PDF text extraction succeeded."""
+    if state.get("error") or not state.get("raw_text"):
         return END
     return "parse_with_llm"
 
 
-# Build the Graph
 workflow = StateGraph(ResumeState)
-
-workflow.add_node("extract_text", extract_text_node)
+workflow.add_node("extract_text", extract_resume_pdf_text_node)
 workflow.add_node("parse_with_llm", parse_with_llm_node)
 
 workflow.set_entry_point("extract_text")
-workflow.add_conditional_edges("extract_text", router, {"parse_with_llm": "parse_with_llm", END: END})
+workflow.add_conditional_edges(
+    "extract_text", router, {"parse_with_llm": "parse_with_llm", END: END}
+)
 workflow.add_edge("parse_with_llm", END)
 
 resume_parser_app = workflow.compile()
 
 
 async def process_resume(file_path: str) -> dict:
-    """Helper function to run the graph and return the result."""
-    initial_state = {"file_path": file_path, "raw_text": "", "parsed_profile": None, "error": None}
-    
-    # Run the graph synchronously as PyMuPDF is sync and langchain invoke is blocking by default here,
-    # though we could use ainvoke if we updated the node to be async.
-    # For now, we'll just run it with standard invoke.
+    """Run the resume parsing workflow off the event loop and return the result."""
+    initial_state: ResumeState = {
+        "file_path": file_path,
+        "raw_text": "",
+        "parsed_profile": None,
+        "error": None,
+    }
+
     final_state = await asyncio.to_thread(resume_parser_app.invoke, initial_state)
-    
+
     return {
         "raw_text": final_state.get("raw_text"),
         "profile": final_state.get("parsed_profile"),
-        "error": final_state.get("error")
+        "error": final_state.get("error"),
     }
+
+
+__all__ = ["ResumeState", "process_resume", "resume_parser_app", "workflow"]

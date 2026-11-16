@@ -13,7 +13,7 @@ import time
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from app.agents.llm import get_structured_llm
+from app.agents.helper.llm_factory import get_structured_llm
 from app.schemas.ats_checker import (
     ATSCheckResult,
     ATSFormattingIssue,
