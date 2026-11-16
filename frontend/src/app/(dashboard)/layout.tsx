@@ -6,7 +6,7 @@ import React from "react";
 import { SessionWatcher } from "@/components/SessionWatcher";
 import { SidebarNav } from "@/components/SidebarNav";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { CVGenerationProvider } from "@/context/CVGenerationContext";
+import { DocumentGenerationProvider } from "@/context/DocumentGenerationContext";
 
 export default async function DashboardLayout({
   children,
@@ -71,7 +71,7 @@ export default async function DashboardLayout({
       </aside>
 
       <main className={styles.main}>
-        <CVGenerationProvider>{children}</CVGenerationProvider>
+        <DocumentGenerationProvider>{children}</DocumentGenerationProvider>
       </main>
     </div>
   );

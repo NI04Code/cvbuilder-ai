@@ -15,7 +15,7 @@ import {
   Briefcase,
 } from "lucide-react";
 import { apiClient } from "@/lib/api";
-import { useIsInsideDashboard } from "@/context/CVGenerationContext";
+import { useIsInsideDashboard } from "@/context/DocumentGenerationContext";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import styles from "./page.module.css";
 
