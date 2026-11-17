@@ -279,18 +279,111 @@
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+}
+
+.listItemEditDragging {
+  opacity: 0.55;
+  border-style: dashed;
+}
+
+.listItemEditDropTarget {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary-soft);
 }
 
 .listItemEditHeader {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 0.75rem;
+}
+
+.listItemEditTitleGroup {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
 }
 
 .listItemEditTitle {
   font-weight: 600;
   color: var(--text-primary);
   font-size: 0.875rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.listItemEditActions {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex-shrink: 0;
+}
+
+.dragHandle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  cursor: grab;
+  touch-action: none;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.dragHandle:hover {
+  color: var(--text-primary);
+  background: var(--bg-surface-hover);
+}
+
+.dragHandle:active {
+  cursor: grabbing;
+}
+
+.reorderBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.35rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+}
+
+.reorderBtn:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--primary-text);
+  background: var(--primary-soft);
+}
+
+.reorderBtn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.sortBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.38rem 0.7rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  background: var(--bg-inset);
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-weight: 500;
+  transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+}
+
+.sortBtn:hover {
+  border-color: var(--primary);
+  color: var(--primary-text);
+  background: var(--primary-soft);
 }
 
 .inlineRow {
@@ -300,9 +393,15 @@
   align-items: start;
 }
 
-.dateInput {
+.monthYearRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.dateSelect {
   width: 100%;
-  padding: 0.65rem 0.875rem;
+  padding: 0.65rem 0.75rem;
   background: var(--bg-inset);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
@@ -313,11 +412,11 @@
   transition: border-color 0.15s ease;
 }
 
-.dateInput:focus {
+.dateSelect:focus {
   border-color: var(--primary);
 }
 
-.dateInput:disabled {
+.dateSelect:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }

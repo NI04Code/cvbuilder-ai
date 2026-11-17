@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, DragEvent, ChangeEvent, useCallback } from "react";
+import { useEffect, useState, useRef, DragEvent, ChangeEvent, ReactNode, useCallback } from "react";
 import {
   UserCircle,
   Briefcase,
@@ -12,6 +12,10 @@ import {
   Save,
   Plus,
   Trash2,
+  GripVertical,
+  ArrowUp,
+  ArrowDown,
+  ArrowDownWideNarrow,
   AlertCircle,
   CheckCircle,
   Award,
@@ -24,6 +28,14 @@ import { apiClient } from "@/lib/api";
 import styles from "./page.module.css";
 
 type TabId = "profile" | "import";
+type ReorderableSection = "work_experiences" | "certifications" | "projects";
+type SortableDateSection = "work_experiences" | "certifications";
+type ManualOrderPrefs = Record<SortableDateSection, boolean>;
+
+const DEFAULT_MANUAL_ORDER: ManualOrderPrefs = {
+  work_experiences: false,
+  certifications: false,
+};
 
 export default function ProfilePage() {
   const { data: session, status, update } = useSession();
@@ -34,6 +46,14 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState<any>(null);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [manualOrder, setManualOrder] = useState<ManualOrderPrefs>(DEFAULT_MANUAL_ORDER);
+  const [dragSource, setDragSource] = useState<{ section: ReorderableSection; idx: number } | null>(
+    null
+  );
+  const [dragOverTarget, setDragOverTarget] = useState<{
+    section: ReorderableSection;
+    idx: number;
+  } | null>(null);
 
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -41,14 +61,28 @@ export default function ProfilePage() {
 
   const token = (session as any)?.backendAccessToken;
 
+  const applyInitialDateSort = useCallback((rawProfile: any, prefs: ManualOrderPrefs) => {
+    const next = deepClone(rawProfile);
+    if (!prefs.work_experiences && Array.isArray(next.work_experiences)) {
+      next.work_experiences = sortWorkExperiencesDesc(next.work_experiences);
+    }
+    if (!prefs.certifications && Array.isArray(next.certifications)) {
+      next.certifications = sortCertificationsDesc(next.certifications);
+    }
+    return next;
+  }, []);
+
   const fetchProfile = useCallback(async () => {
     if (status !== "authenticated") return;
     try {
       const response = await apiClient.get("/profile/", {
         headers: { Authorization: `Bearer ${token}` },
       });
-      setProfile(response.data);
-      setFormData(deepClone(response.data));
+      const prefs = readManualOrderPref(response.data?.user_id);
+      const prepared = applyInitialDateSort(response.data, prefs);
+      setManualOrder(prefs);
+      setProfile(prepared);
+      setFormData(deepClone(prepared));
     } catch (err: any) {
       if (err.response?.status === 404) {
         setProfile(null);
@@ -56,7 +90,7 @@ export default function ProfilePage() {
     } finally {
       setLoading(false);
     }
-  }, [status, token]);
+  }, [status, token, applyInitialDateSort]);
 
   useEffect(() => {
     fetchProfile();
@@ -90,9 +124,10 @@ export default function ProfilePage() {
     const fd = new FormData();
     fd.append("file", file);
     try {
-      await apiClient.post("/resume/upload", fd, {
+      const uploadResponse = await apiClient.post("/resume/upload", fd, {
         headers: { "Content-Type": "multipart/form-data", Authorization: `Bearer ${token}` },
       });
+      writeManualOrderPref(uploadResponse.data?.user_id || profile?.user_id, DEFAULT_MANUAL_ORDER);
       await update({ hasProfile: true });
       await fetchProfile();
       setMessage({ type: "success", text: "Resume parsed into your base profile." });
@@ -112,11 +147,14 @@ export default function ProfilePage() {
       if (formData.personal_info) payload.personal_info = formData.personal_info;
       if (formData.summary !== undefined) payload.summary = formData.summary;
       if (formData.work_experiences) {
-        payload.work_experiences = formData.work_experiences.map((exp: any) => ({
+        const normalizedWork = formData.work_experiences.map((exp: any) => ({
           ...exp,
           start_date: formatDateForSave(exp.start_date),
           end_date: formatDateForSave(exp.end_date),
         }));
+        payload.work_experiences = manualOrder.work_experiences
+          ? normalizedWork
+          : sortWorkExperiencesDesc(normalizedWork);
       }
       if (formData.education) {
         payload.education = formData.education.map((edu: any) => ({
@@ -134,19 +172,25 @@ export default function ProfilePage() {
       }
       if (formData.skills) payload.skills = formData.skills;
       if (formData.certifications) {
-        payload.certifications = formData.certifications.map((cert: any) => ({
+        const normalizedCerts = formData.certifications.map((cert: any) => ({
           ...cert,
           date: formatDateForSave(cert.date),
         }));
+        payload.certifications = manualOrder.certifications
+          ? normalizedCerts
+          : sortCertificationsDesc(normalizedCerts);
       }
       if (formData.projects) payload.projects = formData.projects;
 
       const response = await apiClient.put("/profile/", payload, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      writeManualOrderPref(response.data?.user_id || profile?.user_id, manualOrder);
       setProfile(response.data);
       setFormData(deepClone(response.data));
       setEditing(false);
+      setDragSource(null);
+      setDragOverTarget(null);
       setMessage({ type: "success", text: "Profile changes saved." });
       await update({ hasProfile: true });
     } catch (err: any) {
@@ -183,6 +227,9 @@ export default function ProfilePage() {
 
   const cancelEditing = () => {
     setFormData(profile ? deepClone(profile) : null);
+    setManualOrder(readManualOrderPref(profile?.user_id));
+    setDragSource(null);
+    setDragOverTarget(null);
     setEditing(false);
     setMessage(null);
   };
@@ -402,26 +449,62 @@ export default function ProfilePage() {
                 <Briefcase size={19} strokeWidth={1.75} className={styles.sectionIcon} />
                 <span>Work Experience</span>
               </h2>
+              {editing && (formData?.work_experiences || []).length > 1 && (
+                <button
+                  type="button"
+                  className={styles.sortBtn}
+                  onClick={() => sortSectionByDate("work_experiences")}
+                  title="Sort experiences by latest date first"
+                >
+                  <ArrowDownWideNarrow size={14} strokeWidth={1.75} />
+                  <span>Sort by Latest</span>
+                </button>
+              )}
             </div>
             {editing ? (
               <div className={styles.itemsStack}>
-                {(formData?.work_experiences || []).map((exp: any, idx: number) => (
-                  <div key={idx} className={styles.listItemEdit}>
-                    <div className={styles.listItemEditHeader}>
-                      <span className={styles.listItemEditTitle}>
-                        {exp.title || exp.company
-                          ? `${exp.title || "Role"}${exp.company ? ` · ${exp.company}` : ""}`
-                          : "Position Details"}
-                      </span>
-                      <button
-                        type="button"
-                        className={styles.removeBtn}
-                        onClick={() => removeListItem("work_experiences", idx)}
-                        title="Remove position"
-                      >
-                        <Trash2 size={15} strokeWidth={1.75} />
-                      </button>
-                    </div>
+                <button
+                  type="button"
+                  className={styles.addBtn}
+                  onClick={() =>
+                    addListItem(
+                      "work_experiences",
+                      {
+                        title: "",
+                        company: "",
+                        start_date: "",
+                        end_date: "",
+                        location: "",
+                        bullets: [],
+                      },
+                      true
+                    )
+                  }
+                >
+                  <Plus size={16} strokeWidth={2} />
+                  <span>Add Work Experience</span>
+                </button>
+                {(formData?.work_experiences || []).map((exp: any, idx: number, arr: any[]) => (
+                  <SortableEditCard
+                    key={idx}
+                    section="work_experiences"
+                    idx={idx}
+                    total={arr.length}
+                    title={
+                      exp.title || exp.company
+                        ? `${exp.title || "Role"}${exp.company ? ` · ${exp.company}` : ""}`
+                        : "Position Details"
+                    }
+                    removeTitle="Remove position"
+                    dragSource={dragSource}
+                    dragOverTarget={dragOverTarget}
+                    onDragStart={handleCardDragStart}
+                    onDragOver={handleCardDragOver}
+                    onDrop={handleCardDrop}
+                    onDragEnd={handleCardDragEnd}
+                    onMove={reorderListItem}
+                    onRemove={() => removeListItem("work_experiences", idx)}
+                  >
                     <div className={styles.inlineRow}>
                       <input
                         className={styles.input}
@@ -437,7 +520,7 @@ export default function ProfilePage() {
                       />
                     </div>
                     <div className={styles.inlineRow}>
-                      <CalendarDateInput
+                      <MonthYearInput
                         label="Start Date"
                         value={exp.start_date || ""}
                         onChange={(val) => updateListItem("work_experiences", idx, "start_date", val)}
@@ -450,31 +533,14 @@ export default function ProfilePage() {
                     </div>
                     <textarea
                       className={styles.textarea}
-                      placeholder="Key achievements and impact (one bullet per line)"
+                      placeholder="Key achievements and impact (each bullet seperated by Enter)"
                       value={(exp.bullets || []).join("\n")}
                       onChange={(e) =>
                         updateListItem("work_experiences", idx, "bullets", e.target.value.split("\n"))
                       }
                     />
-                  </div>
+                  </SortableEditCard>
                 ))}
-                <button
-                  type="button"
-                  className={styles.addBtn}
-                  onClick={() =>
-                    addListItem("work_experiences", {
-                      title: "",
-                      company: "",
-                      start_date: "",
-                      end_date: "",
-                      location: "",
-                      bullets: [],
-                    })
-                  }
-                >
-                  <Plus size={16} strokeWidth={2} />
-                  <span>Add Work Experience</span>
-                </button>
               </div>
             ) : (profile?.work_experiences || []).length > 0 ? (
               <div className={styles.itemsStack}>
@@ -550,7 +616,7 @@ export default function ProfilePage() {
                       />
                     </div>
                     <div className={styles.inlineRow}>
-                      <CalendarDateInput
+                      <MonthYearInput
                         label="Start Date"
                         value={edu.start_date || ""}
                         onChange={(val) => updateListItem("education", idx, "start_date", val)}
@@ -567,20 +633,12 @@ export default function ProfilePage() {
                       value={edu.gpa || ""}
                       onChange={(e) => updateListItem("education", idx, "gpa", e.target.value)}
                     />
-                    <input
-                      className={styles.input}
+                    <CommaSeparatedInput
+                      values={edu.relevant_coursework || []}
                       placeholder="Relevant coursework (comma-separated)"
-                      value={(edu.relevant_coursework || []).join(", ")}
-                      onChange={(e) =>
-                        updateListItem(
-                          "education",
-                          idx,
-                          "relevant_coursework",
-                          e.target.value
-                            .split(",")
-                            .map((c: string) => c.trim())
-                            .filter(Boolean)
-                        )
+                      ariaLabel="Relevant coursework"
+                      onChange={(next) =>
+                        updateListItem("education", idx, "relevant_coursework", next)
                       }
                     />
                   </div>
@@ -686,7 +744,7 @@ export default function ProfilePage() {
                       />
                     </div>
                     <div className={styles.inlineRow}>
-                      <CalendarDateInput
+                      <MonthYearInput
                         label="Start Date"
                         value={act.start_date || ""}
                         onChange={(val) =>
@@ -711,7 +769,7 @@ export default function ProfilePage() {
                     />
                     <textarea
                       className={styles.textarea}
-                      placeholder="Key contributions and impact (one bullet per line)"
+                      placeholder="Key contributions and impact (each bullet seperated by Enter)"
                       value={(act.bullets || []).join("\n")}
                       onChange={(e) =>
                         updateListItem(
@@ -830,23 +888,57 @@ export default function ProfilePage() {
                 <Award size={19} strokeWidth={1.75} className={styles.sectionIcon} />
                 <span>Certifications</span>
               </h2>
+              {editing && (formData?.certifications || []).length > 1 && (
+                <button
+                  type="button"
+                  className={styles.sortBtn}
+                  onClick={() => sortSectionByDate("certifications")}
+                  title="Sort certifications by latest date first"
+                >
+                  <ArrowDownWideNarrow size={14} strokeWidth={1.75} />
+                  <span>Sort by Latest</span>
+                </button>
+              )}
             </div>
             {editing ? (
               <div className={styles.itemsStack}>
-                {(formData?.certifications || []).map((cert: any, idx: number) => (
-                  <div key={idx} className={styles.listItemEdit}>
-                    <div className={styles.listItemEditHeader}>
-                      <span className={styles.listItemEditTitle}>
-                        {cert.name || "Certification"}
-                      </span>
-                      <button
-                        type="button"
-                        className={styles.removeBtn}
-                        onClick={() => removeListItem("certifications", idx)}
-                      >
-                        <Trash2 size={15} strokeWidth={1.75} />
-                      </button>
-                    </div>
+                <button
+                  type="button"
+                  className={styles.addBtn}
+                  onClick={() =>
+                    addListItem(
+                      "certifications",
+                      {
+                        name: "",
+                        issuer: "",
+                        date: "",
+                        credential_id: "",
+                        url: "",
+                      },
+                      true
+                    )
+                  }
+                >
+                  <Plus size={16} strokeWidth={2} />
+                  <span>Add Certification</span>
+                </button>
+                {(formData?.certifications || []).map((cert: any, idx: number, arr: any[]) => (
+                  <SortableEditCard
+                    key={idx}
+                    section="certifications"
+                    idx={idx}
+                    total={arr.length}
+                    title={cert.name || "Certification"}
+                    removeTitle="Remove certification"
+                    dragSource={dragSource}
+                    dragOverTarget={dragOverTarget}
+                    onDragStart={handleCardDragStart}
+                    onDragOver={handleCardDragOver}
+                    onDrop={handleCardDrop}
+                    onDragEnd={handleCardDragEnd}
+                    onMove={reorderListItem}
+                    onRemove={() => removeListItem("certifications", idx)}
+                  >
                     <input
                       className={styles.input}
                       placeholder="Certification Name"
@@ -863,7 +955,7 @@ export default function ProfilePage() {
                           onChange={(e) => updateListItem("certifications", idx, "issuer", e.target.value)}
                         />
                       </div>
-                      <CalendarDateInput
+                      <MonthYearInput
                         label="Date Obtained"
                         value={cert.date || ""}
                         onChange={(val) => updateListItem("certifications", idx, "date", val)}
@@ -888,24 +980,8 @@ export default function ProfilePage() {
                         }
                       />
                     </div>
-                  </div>
+                  </SortableEditCard>
                 ))}
-                <button
-                  type="button"
-                  className={styles.addBtn}
-                  onClick={() =>
-                    addListItem("certifications", {
-                      name: "",
-                      issuer: "",
-                      date: "",
-                      credential_id: "",
-                      url: "",
-                    })
-                  }
-                >
-                  <Plus size={16} strokeWidth={2} />
-                  <span>Add Certification</span>
-                </button>
               </div>
             ) : (profile?.certifications || []).length > 0 ? (
               <div className={styles.itemsStack}>
@@ -951,20 +1027,42 @@ export default function ProfilePage() {
             </div>
             {editing ? (
               <div className={styles.itemsStack}>
-                {(formData?.projects || []).map((proj: any, idx: number) => (
-                  <div key={idx} className={styles.listItemEdit}>
-                    <div className={styles.listItemEditHeader}>
-                      <span className={styles.listItemEditTitle}>
-                        {proj.name || "Project"}
-                      </span>
-                      <button
-                        type="button"
-                        className={styles.removeBtn}
-                        onClick={() => removeListItem("projects", idx)}
-                      >
-                        <Trash2 size={15} strokeWidth={1.75} />
-                      </button>
-                    </div>
+                <button
+                  type="button"
+                  className={styles.addBtn}
+                  onClick={() =>
+                    addListItem(
+                      "projects",
+                      {
+                        name: "",
+                        description: "",
+                        technologies: [],
+                        url: "",
+                      },
+                      true
+                    )
+                  }
+                >
+                  <Plus size={16} strokeWidth={2} />
+                  <span>Add Project</span>
+                </button>
+                {(formData?.projects || []).map((proj: any, idx: number, arr: any[]) => (
+                  <SortableEditCard
+                    key={idx}
+                    section="projects"
+                    idx={idx}
+                    total={arr.length}
+                    title={proj.name || "Project"}
+                    removeTitle="Remove project"
+                    dragSource={dragSource}
+                    dragOverTarget={dragOverTarget}
+                    onDragStart={handleCardDragStart}
+                    onDragOver={handleCardDragOver}
+                    onDrop={handleCardDrop}
+                    onDragEnd={handleCardDragEnd}
+                    onMove={reorderListItem}
+                    onRemove={() => removeListItem("projects", idx)}
+                  >
                     <input
                       className={styles.input}
                       placeholder="Project Name"
@@ -979,21 +1077,11 @@ export default function ProfilePage() {
                         updateListItem("projects", idx, "description", e.target.value)
                       }
                     />
-                    <input
-                      className={styles.input}
+                    <CommaSeparatedInput
+                      values={proj.technologies || []}
                       placeholder="Technologies (comma-separated)"
-                      value={(proj.technologies || []).join(", ")}
-                      onChange={(e) =>
-                        updateListItem(
-                          "projects",
-                          idx,
-                          "technologies",
-                          e.target.value
-                            .split(",")
-                            .map((t: string) => t.trim())
-                            .filter(Boolean)
-                        )
-                      }
+                      ariaLabel="Project technologies"
+                      onChange={(next) => updateListItem("projects", idx, "technologies", next)}
                     />
                     <input
                       className={styles.input}
@@ -1001,23 +1089,8 @@ export default function ProfilePage() {
                       value={proj.url || ""}
                       onChange={(e) => updateListItem("projects", idx, "url", e.target.value)}
                     />
-                  </div>
+                  </SortableEditCard>
                 ))}
-                <button
-                  type="button"
-                  className={styles.addBtn}
-                  onClick={() =>
-                    addListItem("projects", {
-                      name: "",
-                      description: "",
-                      technologies: [],
-                      url: "",
-                    })
-                  }
-                >
-                  <Plus size={16} strokeWidth={2} />
-                  <span>Add Project</span>
-                </button>
               </div>
             ) : (profile?.projects || []).length > 0 ? (
               <div className={styles.itemsStack}>
@@ -1104,10 +1177,11 @@ export default function ProfilePage() {
     setFormData({ ...formData, [section]: items });
   }
 
-  function addListItem(section: string, template: any) {
+  function addListItem(section: string, template: any, prepend = false) {
+    const existing = formData?.[section] || [];
     setFormData({
       ...formData,
-      [section]: [...(formData?.[section] || []), template],
+      [section]: prepend ? [template, ...existing] : [...existing, template],
     });
   }
 
@@ -1115,7 +1189,195 @@ export default function ProfilePage() {
     const items = [...(formData?.[section] || [])];
     items.splice(idx, 1);
     setFormData({ ...formData, [section]: items });
+    setDragSource(null);
+    setDragOverTarget(null);
   }
+
+  function reorderListItem(section: ReorderableSection, fromIdx: number, toIdx: number) {
+    const items = [...(formData?.[section] || [])];
+    if (
+      fromIdx === toIdx ||
+      fromIdx < 0 ||
+      toIdx < 0 ||
+      fromIdx >= items.length ||
+      toIdx >= items.length
+    ) {
+      return;
+    }
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+    const [moved] = items.splice(fromIdx, 1);
+    items.splice(toIdx, 0, moved);
+    setFormData({ ...formData, [section]: items });
+    if (section === "work_experiences" || section === "certifications") {
+      setManualOrder((prev) => ({ ...prev, [section]: true }));
+    }
+  }
+
+  function sortSectionByDate(section: SortableDateSection) {
+    const items = [...(formData?.[section] || [])];
+    const sorted =
+      section === "work_experiences"
+        ? sortWorkExperiencesDesc(items)
+        : sortCertificationsDesc(items);
+    setFormData({ ...formData, [section]: sorted });
+    setManualOrder((prev) => ({ ...prev, [section]: false }));
+  }
+
+  function handleCardDragStart(
+    e: DragEvent<HTMLDivElement>,
+    section: ReorderableSection,
+    idx: number
+  ) {
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", `${section}:${idx}`);
+    setDragSource({ section, idx });
+    setDragOverTarget({ section, idx });
+  }
+
+  function handleCardDragOver(
+    e: DragEvent<HTMLDivElement>,
+    section: ReorderableSection,
+    idx: number
+  ) {
+    if (!dragSource || dragSource.section !== section) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (!dragOverTarget || dragOverTarget.section !== section || dragOverTarget.idx !== idx) {
+      setDragOverTarget({ section, idx });
+    }
+  }
+
+  function handleCardDrop(
+    e: DragEvent<HTMLDivElement>,
+    section: ReorderableSection,
+    targetIdx: number
+  ) {
+    if (!dragSource || dragSource.section !== section) return;
+    e.preventDefault();
+    reorderListItem(section, dragSource.idx, targetIdx);
+    setDragSource(null);
+    setDragOverTarget(null);
+  }
+
+  function handleCardDragEnd() {
+    setDragSource(null);
+    setDragOverTarget(null);
+  }
+}
+
+function SortableEditCard({
+  section,
+  idx,
+  total,
+  title,
+  removeTitle,
+  dragSource,
+  dragOverTarget,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  onDragEnd,
+  onMove,
+  onRemove,
+  children,
+}: {
+  section: ReorderableSection;
+  idx: number;
+  total: number;
+  title: string;
+  removeTitle: string;
+  dragSource: { section: ReorderableSection; idx: number } | null;
+  dragOverTarget: { section: ReorderableSection; idx: number } | null;
+  onDragStart: (e: DragEvent<HTMLDivElement>, section: ReorderableSection, idx: number) => void;
+  onDragOver: (e: DragEvent<HTMLDivElement>, section: ReorderableSection, idx: number) => void;
+  onDrop: (e: DragEvent<HTMLDivElement>, section: ReorderableSection, idx: number) => void;
+  onDragEnd: () => void;
+  onMove: (section: ReorderableSection, fromIdx: number, toIdx: number) => void;
+  onRemove: () => void;
+  children: ReactNode;
+}) {
+  const cardRef = useRef<HTMLDivElement>(null);
+  const isDragging = dragSource?.section === section && dragSource.idx === idx;
+  const isDropTarget =
+    dragOverTarget?.section === section &&
+    dragOverTarget.idx === idx &&
+    dragSource?.section === section &&
+    dragSource.idx !== idx;
+
+  const setCardDraggable = (enabled: boolean) => {
+    if (cardRef.current) {
+      cardRef.current.draggable = enabled;
+    }
+  };
+
+  return (
+    <div
+      ref={cardRef}
+      className={`${styles.listItemEdit} ${isDragging ? styles.listItemEditDragging : ""} ${
+        isDropTarget ? styles.listItemEditDropTarget : ""
+      }`}
+      onDragStart={(e) => onDragStart(e, section, idx)}
+      onDragOver={(e) => onDragOver(e, section, idx)}
+      onDrop={(e) => {
+        setCardDraggable(false);
+        onDrop(e, section, idx);
+      }}
+      onDragEnd={() => {
+        setCardDraggable(false);
+        onDragEnd();
+      }}
+    >
+      <div className={styles.listItemEditHeader}>
+        <div className={styles.listItemEditTitleGroup}>
+          <button
+            type="button"
+            className={styles.dragHandle}
+            onMouseDown={() => setCardDraggable(true)}
+            onMouseUp={() => setCardDraggable(false)}
+            aria-label={`Drag to reorder ${title}`}
+            title="Drag to reorder"
+          >
+            <GripVertical size={15} strokeWidth={1.75} />
+          </button>
+          <span className={styles.listItemEditTitle}>{title}</span>
+        </div>
+        <div className={styles.listItemEditActions}>
+          <button
+            type="button"
+            className={styles.reorderBtn}
+            onClick={() => onMove(section, idx, idx - 1)}
+            disabled={idx === 0}
+            aria-label={`Move ${title} up`}
+            title="Move up"
+          >
+            <ArrowUp size={14} strokeWidth={1.75} />
+          </button>
+          <button
+            type="button"
+            className={styles.reorderBtn}
+            onClick={() => onMove(section, idx, idx + 1)}
+            disabled={idx >= total - 1}
+            aria-label={`Move ${title} down`}
+            title="Move down"
+          >
+            <ArrowDown size={14} strokeWidth={1.75} />
+          </button>
+          <button
+            type="button"
+            className={styles.removeBtn}
+            onClick={onRemove}
+            title={removeTitle}
+            aria-label={removeTitle}
+          >
+            <Trash2 size={15} strokeWidth={1.75} />
+          </button>
+        </div>
+      </div>
+      {children}
+    </div>
+  );
 }
 
 function ImportTab({
@@ -1160,6 +1422,61 @@ function ImportTab({
   );
 }
 
+function CommaSeparatedInput({
+  values,
+  placeholder,
+  ariaLabel,
+  onChange,
+}: {
+  values: string[];
+  placeholder: string;
+  ariaLabel: string;
+  onChange: (next: string[]) => void;
+}) {
+  const normalizedValues = normalizeTagList(values || []);
+  const externalFormatted = normalizedValues.join(", ");
+  const [rawText, setRawText] = useState(externalFormatted);
+  const [isFocused, setIsFocused] = useState(false);
+
+  // Preserve raw typed commas/spaces while focused; normalize from props otherwise.
+  const displayValue = isFocused ? rawText : externalFormatted;
+
+  const commitIfChanged = (candidateRaw: string) => {
+    const parsed = parseTagList(candidateRaw);
+    if (!tagListsEqual(parsed, normalizedValues)) {
+      onChange(parsed);
+    }
+    return parsed;
+  };
+
+  return (
+    <input
+      type="text"
+      className={styles.input}
+      placeholder={placeholder}
+      aria-label={ariaLabel}
+      maxLength={MAX_RAW_COMMA_INPUT_LENGTH}
+      value={displayValue}
+      onFocus={() => {
+        setRawText(externalFormatted);
+        setIsFocused(true);
+      }}
+      onChange={(e) => {
+        const sanitizedRaw = stripUnsafeInputChars(e.target.value).slice(
+          0,
+          MAX_RAW_COMMA_INPUT_LENGTH
+        );
+        setRawText(sanitizedRaw);
+        commitIfChanged(sanitizedRaw);
+      }}
+      onBlur={() => {
+        commitIfChanged(rawText);
+        setIsFocused(false);
+      }}
+    />
+  );
+}
+
 function SkillTagEditor({
   label,
   tags,
@@ -1171,12 +1488,12 @@ function SkillTagEditor({
 }) {
   const [input, setInput] = useState("");
 
-  const addTag = () => {
-    const trimmed = input.trim();
-    if (trimmed && !tags.includes(trimmed)) {
-      onChange([...tags, trimmed]);
-      setInput("");
-    }
+  const addTags = (rawValue: string) => {
+    const incoming = parseTagList(rawValue);
+    if (incoming.length === 0) return;
+    const merged = normalizeTagList([...tags, ...incoming]);
+    onChange(merged);
+    setInput("");
   };
 
   return (
@@ -1203,16 +1520,24 @@ function SkillTagEditor({
         <input
           className={styles.input}
           value={input}
-          placeholder={`Add ${label.toLowerCase()} skill and press Enter…`}
-          onChange={(e) => setInput(e.target.value)}
+          maxLength={MAX_RAW_COMMA_INPUT_LENGTH}
+          placeholder={`Add ${label.toLowerCase()} skill and press Enter or comma…`}
+          onChange={(e) =>
+            setInput(stripUnsafeInputChars(e.target.value).slice(0, MAX_RAW_COMMA_INPUT_LENGTH))
+          }
           onKeyDown={(e) => {
-            if (e.key === "Enter") {
+            if (e.key === "Enter" || (e.key === "," && input.trim())) {
               e.preventDefault();
-              addTag();
+              addTags(input);
             }
           }}
         />
-        <button className={styles.tagAddBtn} onClick={addTag} type="button" aria-label="Add skill">
+        <button
+          className={styles.tagAddBtn}
+          onClick={() => addTags(input)}
+          type="button"
+          aria-label="Add skill"
+        >
           <Plus size={16} strokeWidth={2} />
         </button>
       </div>
@@ -1220,7 +1545,7 @@ function SkillTagEditor({
   );
 }
 
-function CalendarDateInput({
+function MonthYearInput({
   label,
   value,
   disabled = false,
@@ -1231,32 +1556,61 @@ function CalendarDateInput({
   disabled?: boolean;
   onChange: (value: string) => void;
 }) {
-  const inputValue = disabled ? "" : toDateInputValue(value);
+  const [draftMonth, setDraftMonth] = useState("");
+  const parsed = disabled ? null : parseMonthYearParts(value);
+  const selectedYear = parsed?.year || "";
+  const selectedMonth = disabled ? "" : selectedYear ? parsed?.month || "" : draftMonth;
+  const yearOptions = getYearOptions(selectedYear);
+
+  const emitMonthYear = (nextMonth: string, nextYear: string) => {
+    if (disabled) return;
+    if (!nextYear) {
+      setDraftMonth(nextMonth);
+      if (value) onChange("");
+      return;
+    }
+    setDraftMonth("");
+    if (nextMonth) {
+      const monthName = SHORT_MONTHS[parseInt(nextMonth, 10) - 1];
+      onChange(monthName ? `${monthName} ${nextYear}` : `${nextYear}-${nextMonth}`);
+    } else {
+      onChange(nextYear);
+    }
+  };
+
   return (
     <div className={styles.field}>
       <label className={styles.fieldLabel}>{label}</label>
-      <input
-        type="date"
-        className={styles.dateInput}
-        value={inputValue}
-        disabled={disabled}
-        onClick={(e) => {
-          if (disabled) return;
-          try {
-            e.currentTarget.showPicker?.();
-          } catch {
-            // Fallback gracefully on browsers that block programmatic picker opening
-          }
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "Tab" || e.key === "Shift" || e.key === "Escape") return;
-          if (e.key === "Backspace" || e.key === "Delete") {
-            onChange("");
-          }
-          e.preventDefault();
-        }}
-        onChange={(e) => onChange(e.target.value)}
-      />
+      <div className={styles.monthYearRow}>
+        <select
+          className={styles.dateSelect}
+          aria-label={`${label} month`}
+          value={selectedMonth}
+          disabled={disabled}
+          onChange={(e) => emitMonthYear(e.target.value, selectedYear)}
+        >
+          <option value="">Month</option>
+          {MONTH_OPTIONS.map((m) => (
+            <option key={m.value} value={m.value}>
+              {m.label}
+            </option>
+          ))}
+        </select>
+        <select
+          className={styles.dateSelect}
+          aria-label={`${label} year`}
+          value={selectedYear}
+          disabled={disabled}
+          onChange={(e) => emitMonthYear(selectedMonth, e.target.value)}
+        >
+          <option value="">Year</option>
+          {yearOptions.map((yr) => (
+            <option key={yr} value={yr}>
+              {yr}
+            </option>
+          ))}
+        </select>
+      </div>
     </div>
   );
 }
@@ -1273,7 +1627,7 @@ function EndDateField({
   const isPresent = /^(present|current|now)$/i.test((value || "").trim());
   return (
     <div className={styles.endDateWrap}>
-      <CalendarDateInput
+      <MonthYearInput
         label={label}
         value={value}
         disabled={isPresent}
@@ -1320,28 +1674,57 @@ const MONTH_INDEX: Record<string, string> = {
 };
 
 const SHORT_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const MONTH_OPTIONS = SHORT_MONTHS.map((label, idx) => ({
+  value: String(idx + 1).padStart(2, "0"),
+  label,
+}));
 
-function toDateInputValue(raw?: string | null): string {
+function getYearOptions(selectedYear: string): string[] {
+  const maxYear = new Date().getFullYear() + 6;
+  const minYear = 1960;
+  const years: string[] = [];
+  for (let yr = maxYear; yr >= minYear; yr -= 1) {
+    years.push(String(yr));
+  }
+  if (/^\d{4}$/.test(selectedYear) && !years.includes(selectedYear)) {
+    years.push(selectedYear);
+    years.sort((a, b) => Number(b) - Number(a));
+  }
+  return years;
+}
+
+function parseMonthYearParts(raw?: string | null): { month: string; year: string } | null {
   const cleaned = (raw || "").trim();
-  if (!cleaned || /^(present|current|now)$/i.test(cleaned)) return "";
-  if (/^\d{4}-\d{2}-\d{2}$/.test(cleaned)) return cleaned;
-  if (/^\d{4}-\d{2}$/.test(cleaned)) return `${cleaned}-01`;
+  if (!cleaned || /^(present|current|now)$/i.test(cleaned)) return null;
+
+  const isoMatch = cleaned.match(/^(\d{4})-(\d{2})(?:-\d{2})?$/);
+  if (isoMatch) {
+    const monthNum = parseInt(isoMatch[2], 10);
+    if (monthNum >= 1 && monthNum <= 12) {
+      return { month: isoMatch[2], year: isoMatch[1] };
+    }
+  }
 
   const slashMatch = cleaned.match(/^(\d{1,2})\/(\d{4})$/);
   if (slashMatch) {
-    return `${slashMatch[2]}-${slashMatch[1].padStart(2, "0")}-01`;
+    const monthNum = parseInt(slashMatch[1], 10);
+    if (monthNum >= 1 && monthNum <= 12) {
+      return { month: slashMatch[1].padStart(2, "0"), year: slashMatch[2] };
+    }
   }
 
   const monthYearMatch = cleaned.match(/^([A-Za-z]+)\.?\s+(\d{4})$/);
   if (monthYearMatch) {
     const mm = MONTH_INDEX[monthYearMatch[1].toLowerCase()];
-    if (mm) return `${monthYearMatch[2]}-${mm}-01`;
+    if (mm) return { month: mm, year: monthYearMatch[2] };
   }
 
   const yearMatch = cleaned.match(/^(\d{4})$/);
-  if (yearMatch) return `${yearMatch[1]}-01-01`;
+  if (yearMatch) {
+    return { month: "", year: yearMatch[1] };
+  }
 
-  return "";
+  return null;
 }
 
 function formatDateForSave(raw?: string | null): string {
@@ -1355,6 +1738,106 @@ function formatDateForSave(raw?: string | null): string {
     if (monthName) return `${monthName} ${isoMatch[1]}`;
   }
   return cleaned;
+}
+
+function parseProfileDateScore(raw?: string | null): number {
+  const cleaned = (raw || "").trim();
+  if (!cleaned) return Number.NEGATIVE_INFINITY;
+  if (/^(present|current|now)$/i.test(cleaned)) return Number.POSITIVE_INFINITY;
+  const parts = parseMonthYearParts(cleaned);
+  if (!parts) return Number.NEGATIVE_INFINITY;
+  const monthIdx = parts.month ? parseInt(parts.month, 10) - 1 : 0;
+  return Date.UTC(Number(parts.year), monthIdx, 1);
+}
+
+function compareScoresDesc(a: number, b: number): number {
+  if (a === b) return 0;
+  return b > a ? 1 : -1;
+}
+
+function sortWorkExperiencesDesc(items: any[]): any[] {
+  return [...items].sort((a, b) => {
+    const aStart = parseProfileDateScore(a?.start_date);
+    const bStart = parseProfileDateScore(b?.start_date);
+    const aPrimary = (a?.end_date || "").trim() ? parseProfileDateScore(a?.end_date) : aStart;
+    const bPrimary = (b?.end_date || "").trim() ? parseProfileDateScore(b?.end_date) : bStart;
+    return compareScoresDesc(aPrimary, bPrimary) || compareScoresDesc(aStart, bStart);
+  });
+}
+
+function sortCertificationsDesc(items: any[]): any[] {
+  return [...items].sort((a, b) =>
+    compareScoresDesc(parseProfileDateScore(a?.date), parseProfileDateScore(b?.date))
+  );
+}
+
+const ORDER_PREF_PREFIX = "cvbuilder_profile_manual_order_";
+
+function readManualOrderPref(userId?: string | null): ManualOrderPrefs {
+  if (!userId || typeof window === "undefined") return { ...DEFAULT_MANUAL_ORDER };
+  try {
+    const raw = window.localStorage.getItem(`${ORDER_PREF_PREFIX}${userId}`);
+    if (!raw) return { ...DEFAULT_MANUAL_ORDER };
+    const parsed = JSON.parse(raw);
+    return {
+      work_experiences: Boolean(parsed?.work_experiences),
+      certifications: Boolean(parsed?.certifications),
+    };
+  } catch {
+    return { ...DEFAULT_MANUAL_ORDER };
+  }
+}
+
+function writeManualOrderPref(userId?: string | null, prefs?: ManualOrderPrefs) {
+  if (!userId || !prefs || typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(
+      `${ORDER_PREF_PREFIX}${userId}`,
+      JSON.stringify({
+        work_experiences: Boolean(prefs.work_experiences),
+        certifications: Boolean(prefs.certifications),
+      })
+    );
+  } catch {
+    // Ignore storage quota or private-mode restrictions
+  }
+}
+
+const MAX_RAW_COMMA_INPUT_LENGTH = 500;
+const MAX_TAG_ITEMS = 50;
+const MAX_TAG_LENGTH = 100;
+const UNSAFE_INPUT_CHARS_RE = /[\u0000-\u001F\u007F\u202A-\u202E\u2066-\u2069]/g;
+
+function stripUnsafeInputChars(raw: string): string {
+  return raw.replace(/[\r\n\t]/g, " ").replace(UNSAFE_INPUT_CHARS_RE, "");
+}
+
+function normalizeTagList(items: string[]): string[] {
+  const cleanedItems: string[] = [];
+  const seen = new Set<string>();
+  for (const rawItem of items) {
+    if (typeof rawItem !== "string") continue;
+    const cleaned = stripUnsafeInputChars(rawItem)
+      .trim()
+      .replace(/\s+/g, " ")
+      .slice(0, MAX_TAG_LENGTH)
+      .trim();
+    if (!cleaned) continue;
+    const key = cleaned.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    cleanedItems.push(cleaned);
+    if (cleanedItems.length >= MAX_TAG_ITEMS) break;
+  }
+  return cleanedItems;
+}
+
+function parseTagList(raw: string): string[] {
+  return normalizeTagList(raw.slice(0, MAX_RAW_COMMA_INPUT_LENGTH).split(","));
+}
+
+function tagListsEqual(a: string[], b: string[]): boolean {
+  return a.length === b.length && a.every((item, idx) => item === b[idx]);
 }
 
 function toSafeHref(raw?: string | null): string | null {
