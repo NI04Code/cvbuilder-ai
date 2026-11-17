@@ -1,11 +1,40 @@
 """Pydantic schemas for profile (parsed resume) data."""
 
+import re
 import uuid
 from datetime import datetime
 
 from pydantic import BaseModel, Field, ValidationInfo, field_validator
 
 from app.utils.url import sanitize_external_url
+
+_CONTROL_AND_BIDI_RE = re.compile(r"[\x00-\x1f\x7f\u202a-\u202e\u2066-\u2069]")
+_MAX_TAG_ITEMS = 50
+_MAX_TAG_LENGTH = 100
+
+
+def _sanitize_tag_list(items: list[str] | None) -> list[str]:
+    """Strip control/bidi characters, collapse whitespace, deduplicate, and bound tag lists."""
+    if not items:
+        return []
+    cleaned_items: list[str] = []
+    seen: set[str] = set()
+    for raw in items:
+        if not isinstance(raw, str):
+            continue
+        cleaned = raw.replace("\r", " ").replace("\n", " ").replace("\t", " ")
+        cleaned = _CONTROL_AND_BIDI_RE.sub("", cleaned)
+        cleaned = " ".join(cleaned.split())[:_MAX_TAG_LENGTH].strip()
+        if not cleaned:
+            continue
+        key = cleaned.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        cleaned_items.append(cleaned)
+        if len(cleaned_items) >= _MAX_TAG_ITEMS:
+            break
+    return cleaned_items
 
 
 def _clean_optional_url(value: str | None) -> str | None:
@@ -64,6 +93,11 @@ class Education(BaseModel):
         default_factory=list, description="Relevant coursework"
     )
 
+    @field_validator("relevant_coursework", mode="after")
+    @classmethod
+    def sanitize_coursework(cls, value: list[str]) -> list[str]:
+        return _sanitize_tag_list(value)
+
 
 class Certification(BaseModel):
     name: str = Field("", description="Certification name")
@@ -101,12 +135,22 @@ class Project(BaseModel):
     def validate_project_url(cls, value: str | None) -> str | None:
         return _clean_optional_url(value)
 
+    @field_validator("technologies", mode="after")
+    @classmethod
+    def sanitize_technologies(cls, value: list[str]) -> list[str]:
+        return _sanitize_tag_list(value)
+
 
 class SkillSet(BaseModel):
     technical: list[str] = Field(default_factory=list, description="Technical skills")
     soft: list[str] = Field(default_factory=list, description="Soft skills")
     languages: list[str] = Field(default_factory=list, description="Spoken languages")
     tools: list[str] = Field(default_factory=list, description="Tools and platforms")
+
+    @field_validator("technical", "soft", "languages", "tools", mode="after")
+    @classmethod
+    def sanitize_skill_lists(cls, value: list[str]) -> list[str]:
+        return _sanitize_tag_list(value)
 
 
 # ── Resume Profile (used for LLM structured output) ──────────────────────
