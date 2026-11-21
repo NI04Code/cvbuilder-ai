@@ -18,10 +18,10 @@ export default async function DashboardLayout({
 
   if (!isLoggedIn) {
     return (
-      <>
+      <DocumentGenerationProvider>
         <SessionWatcher sessionError={(session as any)?.error} />
         {children}
-      </>
+      </DocumentGenerationProvider>
     );
   }
 

@@ -15,12 +15,16 @@ import styles from "./page.module.css";
 
 type DocumentFilter = "all" | DocumentType;
 
+const PAGE_SIZE = 20;
+
 export default function DashboardPage() {
   const { data: session, status } = useSession();
   const { clearGeneratedDocIfMatches } = useDocumentGeneration();
   const [history, setHistory] = useState<any[]>([]);
   const [activeFilter, setActiveFilter] = useState<DocumentFilter>("all");
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -32,9 +36,11 @@ export default function DashboardPage() {
       try {
         const token = (session as any)?.backendAccessToken;
         const res = await apiClient.get("/documents/history", {
+          params: { limit: PAGE_SIZE, offset: 0 },
           headers: { Authorization: `Bearer ${token}` },
         });
         setHistory(res.data);
+        setHasMore(Array.isArray(res.data) && res.data.length === PAGE_SIZE);
       } catch (err) {
         console.error("Failed to fetch document history", err);
       } finally {
@@ -43,6 +49,30 @@ export default function DashboardPage() {
     }
     fetchHistory();
   }, [session, status]);
+
+  const handleLoadMore = async () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    setActionError(null);
+    try {
+      const token = (session as any)?.backendAccessToken;
+      const res = await apiClient.get("/documents/history", {
+        params: { limit: PAGE_SIZE, offset: history.length },
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const nextItems: any[] = Array.isArray(res.data) ? res.data : [];
+      setHistory((prev) => {
+        const seen = new Set(prev.map((item) => item.id));
+        return [...prev, ...nextItems.filter((item) => !seen.has(item.id))];
+      });
+      setHasMore(nextItems.length === PAGE_SIZE);
+    } catch (err) {
+      console.error("Failed to load more documents", err);
+      setActionError("Failed to load more documents. Please try again.");
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   const handleDownload = async (
     docId: string,
@@ -290,6 +320,20 @@ export default function DashboardPage() {
                 </div>
               );
             })}
+
+            {hasMore && (
+              <div className={styles.paginationBar}>
+                <button
+                  type="button"
+                  onClick={handleLoadMore}
+                  disabled={loadingMore}
+                  className={styles.loadMoreBtn}
+                >
+                  {loadingMore && <span className={styles.btnSpinner} />}
+                  <span>{loadingMore ? "Loading…" : "Load more"}</span>
+                </button>
+              </div>
+            )}
           </div>
         ) : history.length > 0 ? (
           <div className={styles.emptyState}>

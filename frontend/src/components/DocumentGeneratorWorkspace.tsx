@@ -121,29 +121,6 @@ export function DocumentGeneratorWorkspace({
     <div className={styles.container}>
       {/* Left Panel: Job Input Form */}
       <div className={styles.leftPanel}>
-        <div className={styles.modeSwitch} role="tablist" aria-label="Document type">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={!isCoverLetterMode}
-            className={`${styles.modeBtn} ${!isCoverLetterMode ? styles.modeBtnActive : ""}`}
-            onClick={() => setMode("cv")}
-          >
-            <FileSignature size={15} strokeWidth={1.75} />
-            <span>Tailor CV</span>
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={isCoverLetterMode}
-            className={`${styles.modeBtn} ${isCoverLetterMode ? styles.modeBtnActive : ""}`}
-            onClick={() => setMode("cover_letter")}
-          >
-            <Mail size={15} strokeWidth={1.75} />
-            <span>Cover Letter</span>
-          </button>
-        </div>
-
         <header className={styles.header}>
           <h1 className={styles.title}>
             {isCoverLetterMode ? "Write Tailored Cover Letter" : "Tailor CV to Job Posting"}

@@ -38,14 +38,23 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (account && user) {
         try {
           // Sync with backend API
-          const response = await apiClient.post("/auth/verify", {
-            email: user.email,
-            name: user.name,
-            provider: account.provider,
-            provider_account_id: account.providerAccountId,
-            avatar_url: user.image,
-            access_token: account.access_token,
-          });
+          const internalSecret = process.env.INTERNAL_AUTH_SECRET;
+          const response = await apiClient.post(
+            "/auth/verify",
+            {
+              email: user.email,
+              name: user.name,
+              provider: account.provider,
+              provider_account_id: account.providerAccountId,
+              avatar_url: user.image,
+              access_token: account.access_token,
+            },
+            {
+              headers: internalSecret
+                ? { "X-Internal-Auth-Secret": internalSecret }
+                : undefined,
+            }
+          );
 
           // Store backend JWT tokens in NextAuth session token
           token.backendAccessToken = response.data.tokens.access_token;
