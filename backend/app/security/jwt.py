@@ -6,11 +6,10 @@ from datetime import datetime, timedelta, timezone
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
-from app.database import get_db
+from app.core import settings
+from app.database import get_db, user_repo
 from app.models.user import User
 
 # Security scheme for Swagger UI
@@ -40,6 +39,7 @@ def create_refresh_token(user_id: str) -> str:
     payload = {
         "sub": user_id,
         "type": "refresh",
+        "jti": str(uuid.uuid4()),
         "exp": expire,
         "iat": datetime.now(timezone.utc),
     }
@@ -112,8 +112,7 @@ async def get_current_user(
             detail="Invalid user identifier in token",
         )
 
-    result = await db.execute(select(User).where(User.id == uid))
-    user = result.scalar_one_or_none()
+    user = await user_repo.get_user_by_id(db, uid)
 
     if user is None or not user.is_active:
         raise HTTPException(

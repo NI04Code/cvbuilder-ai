@@ -45,8 +45,17 @@ def sanitize_filename(filename: str) -> str:
     return f"{uuid.uuid4().hex}_{safe_name}"
 
 
-def validate_file_type(content_type: str | None, filename: str | None) -> bool:
-    """Validate that the uploaded file is a PDF."""
+def is_pdf_magic_bytes(data: bytes) -> bool:
+    """Return True if the byte buffer begins with the standard %PDF- header."""
+    return data.startswith(b"%PDF-")
+
+
+def validate_file_type(
+    content_type: str | None,
+    filename: str | None,
+    header: bytes | None = None,
+) -> bool:
+    """Validate that the uploaded file is a PDF by MIME type, extension, and optional magic bytes."""
     allowed_types = {"application/pdf"}
     allowed_extensions = {".pdf"}
 
@@ -56,5 +65,6 @@ def validate_file_type(content_type: str | None, filename: str | None) -> bool:
         if filename
         else False
     )
+    magic_ok = is_pdf_magic_bytes(header) if header is not None else True
 
-    return type_ok and ext_ok
+    return type_ok and ext_ok and magic_ok

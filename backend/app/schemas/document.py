@@ -4,7 +4,9 @@ import uuid
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from app.security.sanitizer import sanitize_text
 
 DocumentType = Literal["cv", "cover_letter"]
 
@@ -23,6 +25,13 @@ class JobTargetedRequest(BaseModel):
     )
     job_title: str | None = Field(None, max_length=255, description="Target job title")
     company_name: str | None = Field(None, max_length=255, description="Target company")
+
+    @field_validator("job_description", "job_title", "company_name", mode="before")
+    @classmethod
+    def sanitize_inputs(cls, value: object) -> object:
+        if isinstance(value, str):
+            return sanitize_text(value)
+        return value
 
 
 class DocumentHistoryItem(BaseModel):

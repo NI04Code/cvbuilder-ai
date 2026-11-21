@@ -1,7 +1,8 @@
-"""SQLAlchemy async database engine and session management."""
+"""SQLAlchemy async database engine, session management, and connection check."""
 
 from collections.abc import AsyncGenerator
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
@@ -9,7 +10,7 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.orm import DeclarativeBase
 
-from app.config import settings
+from app.core.settings import settings
 
 engine = create_async_engine(
     settings.database_url,
@@ -43,3 +44,8 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             raise
         finally:
             await session.close()
+
+
+async def check_db_connection(db: AsyncSession) -> None:
+    """Execute a lightweight query to verify database connectivity."""
+    await db.execute(text("SELECT 1"))

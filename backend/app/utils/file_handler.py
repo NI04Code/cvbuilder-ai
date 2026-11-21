@@ -1,10 +1,12 @@
 import os
 import re
-import shutil
 import uuid
 from pathlib import Path
 
+import aiofiles
 from fastapi import HTTPException, UploadFile, status
+
+from app.security.sanitizer import is_pdf_magic_bytes
 
 # Define secure directories relative to project root
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -29,6 +31,20 @@ async def save_upload_file(upload_file: UploadFile, user_id: str | uuid.UUID) ->
             detail="Invalid file type. Only PDF files are allowed.",
         )
 
+    # Validate PDF magic bytes before creating any file on disk
+    header = await upload_file.read(5)
+    await upload_file.seek(0)
+    if not header:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Uploaded file is empty.",
+        )
+    if not is_pdf_magic_bytes(header):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid file content. Only valid PDF files are allowed.",
+        )
+
     # Sanitize filename to prevent path traversal
     safe_filename = f"{uuid.uuid4()}_{os.path.basename(upload_file.filename or 'resume.pdf')}"
     # Remove any potentially dangerous characters
@@ -39,24 +55,27 @@ async def save_upload_file(upload_file: UploadFile, user_id: str | uuid.UUID) ->
     # Ensure user directory exists
     file_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Check file size by reading chunks
+    # Check file size by reading chunks asynchronously
     size = 0
-    
-    with open(file_path, "wb") as buffer:
-        while chunk := await upload_file.read(8192):
-            size += len(chunk)
-            if size > MAX_FILE_SIZE:
-                # Clean up if too large
-                os.remove(file_path)
-                raise HTTPException(
-                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                    detail=f"File too large. Maximum size is {MAX_FILE_SIZE / (1024 * 1024)}MB.",
-                )
-            buffer.write(chunk)
-            
+
+    try:
+        async with aiofiles.open(file_path, "wb") as buffer:
+            while chunk := await upload_file.read(8192):
+                size += len(chunk)
+                if size > MAX_FILE_SIZE:
+                    raise HTTPException(
+                        status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                        detail=f"File too large. Maximum size is {MAX_FILE_SIZE / (1024 * 1024)}MB.",
+                    )
+                await buffer.write(chunk)
+    except Exception:
+        if file_path.exists():
+            file_path.unlink(missing_ok=True)
+        raise
+
     # Reset file pointer if someone else needs to read it later
     await upload_file.seek(0)
-    
+
     return file_path
 
 

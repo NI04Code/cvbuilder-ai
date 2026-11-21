@@ -1,4 +1,4 @@
-"""Shared database, ownership, and file download/delete helpers for generated job documents."""
+"""Shared document business logic — profile validation, ownership enforcement, downloads, deletion, and history."""
 
 import asyncio
 import logging
@@ -6,13 +6,15 @@ import os
 import uuid
 from typing import TypeVar
 
-from fastapi import HTTPException, status
-from fastapi.responses import FileResponse
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.exceptions import BadRequestError, NotFoundError
+from app.database import document_repo, profile_repo
+from app.models.cover_letter import GeneratedCoverLetter
+from app.models.generated_cv import GeneratedCV
 from app.models.profile import Profile
 from app.models.user import User
+from app.schemas.document import DocumentHistoryItem, DocumentType
 from app.schemas.profile import PersonalInfo, ProfileResponse
 from app.utils.file_handler import (
     build_document_filename,
@@ -23,17 +25,15 @@ logger = logging.getLogger(__name__)
 DocModelT = TypeVar("DocModelT")
 
 
-async def get_user_profile_or_400(
+async def get_user_profile_for_generation(
     db: AsyncSession,
     user_id: uuid.UUID,
 ) -> tuple[Profile, ProfileResponse]:
-    """Fetch the user's base profile or raise 400 if none has been created yet."""
-    db_result = await db.execute(select(Profile).where(Profile.user_id == user_id))
-    profile = db_result.scalar_one_or_none()
+    """Fetch the user's base profile or raise BadRequestError if none exists yet."""
+    profile = await profile_repo.get_by_user_id(db, user_id)
     if not profile:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No resume profile found. Please upload or save a profile first.",
+        raise BadRequestError(
+            "No resume profile found. Please upload or save a profile first."
         )
     return profile, ProfileResponse.model_validate(profile)
 
@@ -50,7 +50,7 @@ def resolve_candidate_identity(
     return personal_info, user_name
 
 
-async def get_owned_document_or_404(
+async def get_owned_document(
     db: AsyncSession,
     model_cls: type[DocModelT],
     doc_id: uuid.UUID,
@@ -58,19 +58,15 @@ async def get_owned_document_or_404(
     not_found_detail: str = "Document not found",
 ) -> DocModelT:
     """Load a generated document row scoped strictly to the authenticated owner."""
-    result = await db.execute(
-        select(model_cls).where(model_cls.id == doc_id, model_cls.user_id == user_id)  # type: ignore[attr-defined]
-    )
-    record = result.scalar_one_or_none()
+    record = await document_repo.get_owned_document(db, model_cls, doc_id, user_id)
     if not record:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=not_found_detail)
+        raise NotFoundError(not_found_detail)
     return record
 
 
 async def resolve_download_display_name(db: AsyncSession, user: User) -> str:
     """Resolve candidate name from profile personal_info (or fallback to account name)."""
-    profile_result = await db.execute(select(Profile).where(Profile.user_id == user.id))
-    profile = profile_result.scalar_one_or_none()
+    profile = await profile_repo.get_by_user_id(db, user.id)
     profile_name = (
         profile.personal_info.get("name")
         if profile and isinstance(profile.personal_info, dict)
@@ -79,34 +75,26 @@ async def resolve_download_display_name(db: AsyncSession, user: User) -> str:
     return profile_name or user.name or "Candidate"
 
 
-async def build_pdf_download_response(
+async def get_download_file_info(
     db: AsyncSession,
     model_cls: type[DocModelT],
     doc_id: uuid.UUID,
     user: User,
     filename_prefix: str,
     not_found_detail: str = "Document not found",
-) -> FileResponse:
-    """Validate ownership and file existence, then return the PDF FileResponse with a clean filename."""
-    doc = await get_owned_document_or_404(
+) -> tuple[str, str]:
+    """Validate ownership and file existence, returning (file_path, clean_download_filename)."""
+    doc = await get_owned_document(
         db, model_cls, doc_id, user.id, not_found_detail=not_found_detail
     )
     file_path = getattr(doc, "pdf_file_path", None)
     if not file_path or not os.path.exists(file_path):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="PDF file not found on server",
-        )
+        raise NotFoundError("PDF file not found on server")
 
     user_name = await resolve_download_display_name(db, user)
     company_name = getattr(doc, "company_name", None)
     download_filename = build_document_filename(filename_prefix, company_name, user_name)
-
-    return FileResponse(
-        path=file_path,
-        filename=download_filename,
-        media_type="application/pdf",
-    )
+    return file_path, download_filename
 
 
 async def delete_owned_document(
@@ -117,15 +105,60 @@ async def delete_owned_document(
     not_found_detail: str = "Document not found",
 ) -> None:
     """Delete an owned generated document record from DB and remove its PDF file from disk."""
-    doc = await get_owned_document_or_404(
+    doc = await get_owned_document(
         db, model_cls, doc_id, user_id, not_found_detail=not_found_detail
     )
     pdf_file_path = getattr(doc, "pdf_file_path", None)
-    await db.delete(doc)
-    await db.commit()
+    await document_repo.delete_document(db, doc)
 
     try:
         await asyncio.to_thread(delete_generated_document_file, pdf_file_path, user_id)
     except Exception as exc:
         logger.error("Failed to remove PDF file for deleted document %s: %s", doc_id, exc)
 
+
+async def list_unified_documents(
+    db: AsyncSession,
+    user_id: uuid.UUID,
+    document_type: DocumentType | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> list[DocumentHistoryItem]:
+    """Return user-owned CVs and/or cover letters tagged with `document_type` sorted newest-first."""
+    items: list[DocumentHistoryItem] = []
+    fetch_cap = limit + offset
+
+    if document_type in (None, "cv"):
+        cvs = await document_repo.list_by_user(
+            db, GeneratedCV, user_id, limit=fetch_cap, offset=0
+        )
+        for cv in cvs:
+            items.append(
+                DocumentHistoryItem(
+                    id=cv.id,
+                    document_type="cv",
+                    job_title=cv.job_title,
+                    company_name=cv.company_name,
+                    ats_score=cv.ats_score,
+                    created_at=cv.created_at,
+                )
+            )
+
+    if document_type in (None, "cover_letter"):
+        cover_letters = await document_repo.list_by_user(
+            db, GeneratedCoverLetter, user_id, limit=fetch_cap, offset=0
+        )
+        for cl in cover_letters:
+            items.append(
+                DocumentHistoryItem(
+                    id=cl.id,
+                    document_type="cover_letter",
+                    job_title=cl.job_title,
+                    company_name=cl.company_name,
+                    ats_score=None,
+                    created_at=cl.created_at,
+                )
+            )
+
+    items.sort(key=lambda item: item.created_at, reverse=True)
+    return items[offset : offset + limit]

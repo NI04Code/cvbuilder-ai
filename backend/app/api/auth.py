@@ -1,13 +1,13 @@
-"""Authentication API endpoints."""
+"""Authentication API endpoints — HTTP layer delegating to auth_service."""
 
-import uuid
+import hmac
+import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import settings
 from app.database import get_db
-from app.models.profile import Profile
 from app.models.user import User
 from app.schemas.user import (
     AuthResponse,
@@ -16,29 +16,40 @@ from app.schemas.user import (
     TokenResponse,
     UserResponse,
 )
-from app.security.jwt import create_token_pair, decode_token, get_current_user
+from app.security.jwt import get_current_user
 from app.security.rate_limiter import limiter
-from app.services.auth_service import get_or_create_oauth_user, get_user_by_id
+from app.services.auth_service import (
+    build_user_response,
+    get_or_create_oauth_user,
+    refresh_access_tokens,
+)
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
-async def _user_response(db: AsyncSession, user: User) -> UserResponse:
-    """Build a UserResponse, checking profile existence via explicit query."""
-    result = await db.execute(
-        select(Profile.id).where(Profile.user_id == user.id).limit(1)
-    )
-    has_profile = result.scalar_one_or_none() is not None
+def verify_internal_auth_secret(
+    x_internal_auth_secret: str | None = Header(default=None, alias="X-Internal-Auth-Secret"),
+) -> None:
+    """Verify server-to-server secret between NextAuth and FastAPI."""
+    expected = settings.internal_auth_secret
+    if not expected:
+        if settings.environment == "production":
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Internal auth secret is not configured",
+            )
+        logger.warning(
+            "INTERNAL_AUTH_SECRET is not set; skipping /auth/verify secret check in %s",
+            settings.environment,
+        )
+        return
 
-    return UserResponse(
-        id=user.id,
-        email=user.email,
-        name=user.name,
-        avatar_url=user.avatar_url,
-        is_active=user.is_active,
-        has_profile=has_profile,
-        created_at=user.created_at,
-    )
+    if not x_internal_auth_secret or not hmac.compare_digest(x_internal_auth_secret, expected):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid internal authentication secret",
+        )
 
 
 @router.post(
@@ -46,6 +57,7 @@ async def _user_response(db: AsyncSession, user: User) -> UserResponse:
     response_model=AuthResponse,
     status_code=status.HTTP_200_OK,
     summary="Verify OAuth login and issue JWT tokens",
+    dependencies=[Depends(verify_internal_auth_secret)],
 )
 @limiter.limit("10/minute")
 async def verify_oauth(
@@ -58,9 +70,8 @@ async def verify_oauth(
     Creates or finds the user in the backend DB and returns JWT tokens.
     """
     user, token_pair = await get_or_create_oauth_user(db, data)
-
     return AuthResponse(
-        user=await _user_response(db, user),
+        user=await build_user_response(db, user),
         tokens=TokenResponse(**token_pair),
     )
 
@@ -76,43 +87,8 @@ async def refresh_token(
     data: TokenRefreshRequest,
     db: AsyncSession = Depends(get_db),
 ) -> TokenResponse:
-    """
-    Exchange a valid refresh token for a new access + refresh token pair.
-    Implements token rotation for security.
-    """
-    payload = decode_token(data.refresh_token)
-
-    if payload.get("type") != "refresh":
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token type — refresh token required",
-        )
-
-    user_id = payload.get("sub")
-    if user_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid refresh token",
-        )
-
-    try:
-        uid = uuid.UUID(user_id)
-    except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid user identifier",
-        )
-
-    user = await get_user_by_id(db, uid)
-    if user is None or not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found or deactivated",
-        )
-
-    # Issue new token pair (rotation)
-    new_tokens = create_token_pair(str(user.id), user.email)
-    return TokenResponse(**new_tokens)
+    """Exchange a valid refresh token for a rotated access + refresh token pair."""
+    return await refresh_access_tokens(db, data.refresh_token)
 
 
 @router.get(
@@ -125,4 +101,4 @@ async def get_me(
     db: AsyncSession = Depends(get_db),
 ) -> UserResponse:
     """Return the currently authenticated user's data."""
-    return await _user_response(db, current_user)
+    return await build_user_response(db, current_user)

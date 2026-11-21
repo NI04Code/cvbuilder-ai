@@ -1,32 +1,40 @@
 """
 CVBuilder AI — FastAPI Application Entry Point.
 
-Configures middleware (CORS, rate limiting, security headers),
-mounts API routes, and exposes the application instance.
+Wires middleware, exception handlers, rate limiting, API routes, and system probes.
 """
 
-from contextlib import asynccontextmanager
 from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
+import logging
 
-from fastapi import FastAPI, Request, status
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import Depends, FastAPI, status
 from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api import api_router
-from app.config import settings
+from app.core import (
+    configure_logging,
+    register_exception_handlers,
+    register_middleware,
+    settings,
+)
+from app.database import check_db_connection, get_db
 from app.security.rate_limiter import limiter
+
+configure_logging(settings.log_level)
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application startup and shutdown events."""
-    # Startup: ensure upload and generated directories exist
+    settings.validate_production_secrets()
     settings.upload_path
     settings.generated_path
     yield
-    # Shutdown: cleanup if needed
 
 
 app = FastAPI(
@@ -38,50 +46,32 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-# ── Rate Limiting ─────────────────────────────────────────────────────────
+# ── Rate Limiting, Middleware & Exception Handlers ────────────────────────
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-
-# ── CORS ──────────────────────────────────────────────────────────────────
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[settings.frontend_url],
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
-    allow_headers=["*"],
-    expose_headers=["Content-Disposition"],  # for file downloads
-)
-
-
-# ── Security Headers Middleware ───────────────────────────────────────────
-@app.middleware("http")
-async def add_security_headers(request: Request, call_next):
-    """Add security headers to every response."""
-    response = await call_next(request)
-    response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["X-Frame-Options"] = "DENY"
-    response.headers["X-XSS-Protection"] = "1; mode=block"
-    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
-    return response
-
+register_middleware(app)
+register_exception_handlers(app)
 
 # ── Mount API Routes ──────────────────────────────────────────────────────
 app.include_router(api_router, prefix="/api")
 
 
-# ── Health Check ──────────────────────────────────────────────────────────
+# ── Health & Readiness Checks ─────────────────────────────────────────────
 @app.get("/health", tags=["System"])
 async def health_check():
-    """Simple health check endpoint."""
+    """Lightweight liveness check endpoint."""
     return {"status": "healthy", "service": "cvbuilder-ai-api"}
 
 
-# ── Global Exception Handler ─────────────────────────────────────────────
-@app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    """Catch-all handler to prevent stack traces from leaking to clients."""
-    return JSONResponse(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content={"detail": "An unexpected error occurred. Please try again later."},
-    )
+@app.get("/health/ready", tags=["System"])
+async def readiness_check(db: AsyncSession = Depends(get_db)):
+    """Readiness check verifying database connectivity without disclosing internal details."""
+    try:
+        await check_db_connection(db)
+    except Exception as exc:
+        logger.error("Readiness check failed: database unreachable (%s)", exc)
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={"status": "unavailable"},
+        )
+    return {"status": "ready", "service": "cvbuilder-ai-api"}

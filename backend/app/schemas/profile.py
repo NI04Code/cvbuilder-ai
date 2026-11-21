@@ -6,6 +6,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field, ValidationInfo, field_validator
 
+from app.security.sanitizer import sanitize_text
 from app.utils.url import sanitize_external_url
 
 _CONTROL_AND_BIDI_RE = re.compile(r"[\x00-\x1f\x7f\u202a-\u202e\u2066-\u2069]")
@@ -63,6 +64,13 @@ class PersonalInfo(BaseModel):
     linkedin_url: str | None = Field(None, description="LinkedIn profile URL")
     portfolio_url: str | None = Field(None, description="Portfolio or personal website")
     other_url: str | None = Field(None, description="Other profile or reference link (e.g., GitHub, Kaggle)")
+
+    @field_validator("name", "email", "phone", "location", mode="before")
+    @classmethod
+    def sanitize_personal_fields(cls, value: object) -> object:
+        if isinstance(value, str):
+            return sanitize_text(value)
+        return value
 
     @field_validator("linkedin_url", "portfolio_url", "other_url", mode="after")
     @classmethod
@@ -211,3 +219,10 @@ class ProfileUpdateRequest(BaseModel):
     skills: SkillSet | None = None
     certifications: list[Certification] | None = None
     projects: list[Project] | None = None
+
+    @field_validator("summary", mode="before")
+    @classmethod
+    def sanitize_summary(cls, value: object) -> object:
+        if isinstance(value, str):
+            return sanitize_text(value)
+        return value

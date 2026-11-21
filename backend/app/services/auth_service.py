@@ -1,13 +1,15 @@
-"""Authentication business logic — user creation and OAuth account linking."""
+"""Authentication business logic — user creation, OAuth account linking, and token refresh."""
 
 import uuid
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.user import OAuthAccount, User
-from app.schemas.user import OAuthVerifyRequest
-from app.security.jwt import create_token_pair
+from app.core.exceptions import UnauthorizedError
+from app.database import profile_repo, user_repo
+from app.models.user import User
+from app.schemas.user import OAuthVerifyRequest, TokenResponse, UserResponse
+from app.security.encryption import encrypt_secret
+from app.security.jwt import create_token_pair, decode_token
 
 
 async def get_or_create_oauth_user(
@@ -16,65 +18,88 @@ async def get_or_create_oauth_user(
 ) -> tuple[User, dict]:
     """
     Find an existing user by email or create a new one.
-    Link the OAuth account if not already linked.
-    Returns (user, token_pair).
+    Link the OAuth account if not already linked and issue JWT tokens.
     """
-    # 1. Try to find existing user by email
-    result = await db.execute(select(User).where(User.email == data.email))
-    user = result.scalar_one_or_none()
+    user = await user_repo.get_user_by_email(db, data.email)
 
     if user is None:
-        # 2. Create new user
-        user = User(
-            id=uuid.uuid4(),
+        user = await user_repo.create_user(
+            db,
             email=data.email,
             name=data.name,
             avatar_url=data.avatar_url,
-            is_active=True,
         )
-        db.add(user)
-        await db.flush()  # Get the user ID without committing
 
-    # 3. Check if this OAuth account is already linked
-    result = await db.execute(
-        select(OAuthAccount).where(
-            OAuthAccount.user_id == user.id,
-            OAuthAccount.provider == data.provider,
-            OAuthAccount.provider_account_id == data.provider_account_id,
-        )
+    existing_oauth = await user_repo.get_oauth_account(
+        db,
+        user_id=user.id,
+        provider=data.provider,
+        provider_account_id=data.provider_account_id,
     )
-    existing_oauth = result.scalar_one_or_none()
+
+    encrypted_access_token = encrypt_secret(data.access_token)
 
     if existing_oauth is None:
-        # 4. Link the OAuth account
-        oauth_account = OAuthAccount(
-            id=uuid.uuid4(),
+        await user_repo.create_oauth_account(
+            db,
             user_id=user.id,
             provider=data.provider,
             provider_account_id=data.provider_account_id,
-            access_token=data.access_token,
+            access_token=encrypted_access_token,
         )
-        db.add(oauth_account)
-    else:
-        # Update access token if provided
-        if data.access_token:
-            existing_oauth.access_token = data.access_token
+    elif encrypted_access_token is not None:
+        existing_oauth.access_token = encrypted_access_token
 
-    # 5. Update user profile data from OAuth if available
     if data.avatar_url and not user.avatar_url:
         user.avatar_url = data.avatar_url
     if data.name and user.name != data.name:
         user.name = data.name
 
-    await db.flush()
+    await user_repo.flush_changes(db)
 
-    # 6. Generate JWT tokens
     token_pair = create_token_pair(str(user.id), user.email)
-
     return user, token_pair
 
 
 async def get_user_by_id(db: AsyncSession, user_id: uuid.UUID) -> User | None:
     """Fetch a user by their UUID."""
-    result = await db.execute(select(User).where(User.id == user_id))
-    return result.scalar_one_or_none()
+    return await user_repo.get_user_by_id(db, user_id)
+
+
+async def build_user_response(db: AsyncSession, user: User) -> UserResponse:
+    """Build a UserResponse including explicit profile-existence check."""
+    has_profile = await profile_repo.has_profile(db, user.id)
+
+    return UserResponse(
+        id=user.id,
+        email=user.email,
+        name=user.name,
+        avatar_url=user.avatar_url,
+        is_active=user.is_active,
+        has_profile=has_profile,
+        created_at=user.created_at,
+    )
+
+
+async def refresh_access_tokens(db: AsyncSession, refresh_token: str) -> TokenResponse:
+    """Validate a refresh token and issue a rotated access + refresh token pair."""
+    payload = decode_token(refresh_token)
+
+    if payload.get("type") != "refresh":
+        raise UnauthorizedError("Invalid token type — refresh token required")
+
+    user_id = payload.get("sub")
+    if user_id is None:
+        raise UnauthorizedError("Invalid refresh token")
+
+    try:
+        uid = uuid.UUID(user_id)
+    except ValueError as exc:
+        raise UnauthorizedError("Invalid user identifier") from exc
+
+    user = await user_repo.get_user_by_id(db, uid)
+    if user is None or not user.is_active:
+        raise UnauthorizedError("User not found or deactivated")
+
+    new_tokens = create_token_pair(str(user.id), user.email)
+    return TokenResponse(**new_tokens)

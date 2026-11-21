@@ -1,10 +1,11 @@
-"""Public ATS Checker API endpoint — no authentication required."""
+"""Public ATS Checker API endpoint — HTTP upload validation delegating to ats_checker_service."""
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile, status
 
-from app.agents.ats_checker_agent import check_cv_ats
 from app.schemas.ats_checker import ATSCheckResult
 from app.security.rate_limiter import limiter
+from app.security.sanitizer import is_pdf_magic_bytes
+from app.services.ats_checker_service import analyze_cv_pdf
 
 router = APIRouter(prefix="/ats-checker", tags=["ATS Checker"])
 
@@ -28,17 +29,14 @@ async def analyze_cv(
     This endpoint is public and does not require authentication.
     The uploaded file is processed entirely in memory and is NOT stored anywhere.
     """
-    # Validate file type
     if file.content_type != "application/pdf":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid file type. Only PDF files are accepted.",
         )
 
-    # Read file bytes into memory
     file_bytes = await file.read()
 
-    # Validate file size
     if len(file_bytes) == 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -49,14 +47,10 @@ async def analyze_cv(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             detail=f"File too large. Maximum size is {MAX_FILE_SIZE // (1024 * 1024)} MB.",
         )
-
-    # Run ATS analysis (in-memory, no disk write)
-    result = await check_cv_ats(file_bytes, target_role=target_role)
-
-    if result.get("error") or not result.get("result"):
+    if not is_pdf_magic_bytes(file_bytes):
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=result.get("error") or "Failed to analyze the CV.",
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid file content. Only valid PDF files are accepted.",
         )
 
-    return result["result"]
+    return await analyze_cv_pdf(file_bytes, target_role=target_role)

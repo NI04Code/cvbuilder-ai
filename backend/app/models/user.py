@@ -38,18 +38,18 @@ class User(Base):
         DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False
     )
 
-    # Relationships
+    # Relationships (lazy="raise" prevents accidental N+1 / over-fetching on auth lookups)
     oauth_accounts: Mapped[list["OAuthAccount"]] = relationship(
-        back_populates="user", cascade="all, delete-orphan", lazy="selectin"
+        back_populates="user", cascade="all, delete-orphan", lazy="raise"
     )
     profile: Mapped["Profile | None"] = relationship(  # type: ignore[name-defined]
-        back_populates="user", cascade="all, delete-orphan", uselist=False, lazy="selectin"
+        back_populates="user", cascade="all, delete-orphan", uselist=False, lazy="raise"
     )
     generated_cvs: Mapped[list["GeneratedCV"]] = relationship(  # type: ignore[name-defined]
-        back_populates="user", cascade="all, delete-orphan", lazy="selectin"
+        back_populates="user", cascade="all, delete-orphan", lazy="raise"
     )
     generated_cover_letters: Mapped[list["GeneratedCoverLetter"]] = relationship(  # type: ignore[name-defined]
-        back_populates="user", cascade="all, delete-orphan", lazy="selectin"
+        back_populates="user", cascade="all, delete-orphan", lazy="raise"
     )
 
 

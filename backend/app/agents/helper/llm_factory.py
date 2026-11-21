@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from langchain_groq import ChatGroq
 from langchain_core.runnables import Runnable
 
-from app.config import settings
+from app.core import settings
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +33,8 @@ def _create_chat_groq(
         "temperature": temperature,
         "max_tokens": max_tokens or settings.groq_max_tokens,
         "api_key": settings.groq_api_key,
+        "timeout": settings.llm_timeout_seconds,
+        "max_retries": settings.llm_max_retries,
     }
     if model.startswith("openai/gpt-oss"):
         kwargs["reasoning_effort"] = "low"
