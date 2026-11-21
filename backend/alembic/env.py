@@ -7,7 +7,7 @@ from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-from app.config import settings
+from app.core import settings
 from app.database import Base
 
 # Import all models so Alembic can discover them for autogenerate
