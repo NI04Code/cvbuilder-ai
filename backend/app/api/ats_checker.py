@@ -4,7 +4,7 @@ from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile, s
 
 from app.schemas.ats_checker import ATSCheckResult
 from app.security.rate_limiter import limiter
-from app.security.sanitizer import is_pdf_magic_bytes
+from app.security.sanitizer import is_pdf_magic_bytes, sanitize_text
 from app.services.ats_checker_service import analyze_cv_pdf
 
 router = APIRouter(prefix="/ats-checker", tags=["ATS Checker"])
@@ -22,6 +22,8 @@ async def analyze_cv(
     request: Request,
     file: UploadFile = File(...),
     target_role: str | None = Form(default=None),
+    company_name: str | None = Form(default=None),
+    job_description: str | None = Form(default=None),
 ) -> ATSCheckResult:
     """
     Upload a PDF resume/CV and receive a detailed ATS compatibility report.
@@ -53,4 +55,13 @@ async def analyze_cv(
             detail="Invalid file content. Only valid PDF files are accepted.",
         )
 
-    return await analyze_cv_pdf(file_bytes, target_role=target_role)
+    clean_role = sanitize_text(target_role)[:120] if target_role else None
+    clean_company = sanitize_text(company_name)[:120] if company_name else None
+    clean_jd = sanitize_text(job_description)[:2500] if job_description else None
+
+    return await analyze_cv_pdf(
+        file_bytes,
+        target_role=clean_role or None,
+        company_name=clean_company or None,
+        job_description=clean_jd or None,
+    )

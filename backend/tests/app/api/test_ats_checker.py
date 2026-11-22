@@ -48,8 +48,17 @@ async def test_analyze_cv_validation_and_success(monkeypatch):
             ok = await client.post(
                 "/api/ats-checker/analyze",
                 files={"file": ("cv.pdf", b"%PDF-1.4 content", "application/pdf")},
-                data={"target_role": "Backend Engineer"},
+                data={
+                    "target_role": "Backend Engineer",
+                    "company_name": "<b>Acme</b>",
+                    "job_description": "Build <b>Python</b> APIs.",
+                },
             )
         assert ok.status_code == 200
         assert ok.json()["overall_score"] == expected.overall_score
-        mock_svc.assert_awaited_once_with(b"%PDF-1.4 content", target_role="Backend Engineer")
+        mock_svc.assert_awaited_once_with(
+            b"%PDF-1.4 content",
+            target_role="Backend Engineer",
+            company_name="Acme",
+            job_description="Build Python APIs.",
+        )

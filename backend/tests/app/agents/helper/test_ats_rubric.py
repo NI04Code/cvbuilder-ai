@@ -150,18 +150,36 @@ def test_cache_and_llm_wrappers(monkeypatch):
     mock_parse_llm = MagicMock()
     mock_parse_llm.invoke.return_value = make_parsed_cv_doc()
     mock_grade_llm = MagicMock()
-    mock_grade_llm.invoke.return_value = make_ats_check_result()
+    mock_grade_llm.invoke.side_effect = [make_ats_check_result(), make_ats_check_result()]
 
     with patch(
         "app.agents.helper.ats_rubric.get_structured_llm",
-        side_effect=[mock_parse_llm, mock_grade_llm],
+        side_effect=[mock_parse_llm, mock_grade_llm, mock_grade_llm],
     ):
         parsed = ats_rubric.parse_cv_to_structured("Alex\nhttps://linkedin.com/in/alex\nPython")
         parsed_cached = ats_rubric.parse_cv_to_structured("Alex\nhttps://linkedin.com/in/alex\nPython")
-        graded = ats_rubric.grade_parsed_cv(parsed, target_role="Backend Engineer")
-        graded_cached = ats_rubric.grade_parsed_cv(parsed, target_role="Backend Engineer")
+        graded = ats_rubric.grade_parsed_cv(
+            parsed,
+            target_role="Backend Engineer",
+            company_name="Acme Corp",
+            job_description="Build Python & FastAPI APIs.",
+        )
+        graded_cached = ats_rubric.grade_parsed_cv(
+            parsed,
+            target_role="Backend Engineer",
+            company_name="Acme Corp",
+            job_description="Build Python & FastAPI APIs.",
+        )
+        graded_other_jd = ats_rubric.grade_parsed_cv(
+            parsed,
+            target_role="Backend Engineer",
+            company_name="Beta Corp",
+            job_description="Build Go microservices.",
+        )
 
     assert mock_parse_llm.invoke.call_count == 1
-    assert mock_grade_llm.invoke.call_count == 1
+    assert mock_grade_llm.invoke.call_count == 2
     assert parsed_cached.word_count == parsed.word_count
     assert graded_cached.overall_score == graded.overall_score
+    assert graded.company_name == "Acme Corp"
+    assert graded_other_jd.company_name == "Beta Corp"

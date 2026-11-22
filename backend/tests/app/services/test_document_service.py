@@ -8,9 +8,11 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from app.core.exceptions import BadRequestError, NotFoundError
+from app.models.cold_email import GeneratedColdEmail
 from app.models.generated_cv import GeneratedCV
 from app.services import document_service
 from tests.conftest import (
+    make_generated_cold_email,
     make_generated_cover_letter,
     make_generated_cv,
     make_profile,
@@ -84,16 +86,30 @@ async def test_list_unified_documents_merges_sorts_and_paginates(mock_db):
     t1 = datetime(2026, 1, 1, tzinfo=timezone.utc)
     t2 = t1 + timedelta(hours=1)
     t3 = t1 + timedelta(hours=2)
+    t4 = t1 + timedelta(hours=3)
 
     cv1 = make_generated_cv(user_id=uid, created_at=t1)
     cv2 = make_generated_cv(user_id=uid, created_at=t3)
     cl1 = make_generated_cover_letter(user_id=uid, created_at=t2)
+    ce1 = make_generated_cold_email(user_id=uid, created_at=t4)
 
     async def _list_by_user(db, model_cls, user_id, *, limit, offset):
-        return [cv2, cv1] if model_cls is GeneratedCV else [cl1]
+        if model_cls is GeneratedCV:
+            return [cv2, cv1]
+        if model_cls is GeneratedColdEmail:
+            return [ce1]
+        return [cl1]
 
     with patch("app.services.document_service.document_repo.list_by_user", side_effect=_list_by_user):
-        page = await document_service.list_unified_documents(mock_db, uid, limit=2, offset=1)
+        page = await document_service.list_unified_documents(mock_db, uid, limit=3, offset=1)
 
-    assert [item.id for item in page] == [cl1.id, cv1.id]
-    assert [item.document_type for item in page] == ["cover_letter", "cv"]
+    assert [item.id for item in page] == [cv2.id, cl1.id, cv1.id]
+    assert [item.document_type for item in page] == ["cv", "cover_letter", "cv"]
+
+    with patch("app.services.document_service.document_repo.list_by_user", side_effect=_list_by_user):
+        ce_only = await document_service.list_unified_documents(
+            mock_db, uid, document_type="cold_email", limit=10, offset=0
+        )
+    assert [item.id for item in ce_only] == [ce1.id]
+    assert ce_only[0].document_type == "cold_email"
+    assert ce_only[0].recruiter_name == ce1.recruiter_name

@@ -12,6 +12,8 @@ logger = logging.getLogger(__name__)
 class ATSGradingNodeState(TypedDict, total=False):
     raw_text: str
     target_role: str | None
+    company_name: str | None
+    job_description: str | None
     parsed_cv: ParsedCVDocument | None
     result: ATSCheckResult | None
     error: str | None
@@ -36,7 +38,12 @@ def grade_cv_node(state: ATSGradingNodeState) -> dict:
         return {**state, "error": "Failed to grade CV: parsed CV structure is missing."}
 
     try:
-        result = grade_parsed_cv(parsed_cv, target_role=state.get("target_role"))
+        result = grade_parsed_cv(
+            parsed_cv,
+            target_role=state.get("target_role"),
+            company_name=state.get("company_name"),
+            job_description=state.get("job_description"),
+        )
         return {**state, "result": result}
     except Exception as e:
         logger.error(f"ATS Checker: grading failed — {e}")

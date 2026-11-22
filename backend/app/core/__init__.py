@@ -2,6 +2,7 @@
 
 from app.core.exceptions import (
     BadRequestError,
+    ConflictError,
     GenerationError,
     NotFoundError,
     ServiceError,
@@ -14,6 +15,7 @@ from app.core.settings import Settings, settings
 
 __all__ = [
     "BadRequestError",
+    "ConflictError",
     "GenerationError",
     "NotFoundError",
     "ServiceError",

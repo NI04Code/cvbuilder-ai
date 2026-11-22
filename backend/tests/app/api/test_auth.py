@@ -8,10 +8,12 @@ from fastapi import HTTPException
 
 from app.api.auth import verify_internal_auth_secret
 from app.core import settings
+from app.core.exceptions import ConflictError, UnauthorizedError
 from app.database import get_db
 from app.main import app
 from app.schemas.user import TokenResponse, UserResponse
 from app.security.jwt import get_current_user
+from app.security.rate_limiter import limiter
 from tests.conftest import make_user
 
 
@@ -93,5 +95,48 @@ async def test_auth_endpoints(mock_db, monkeypatch):
                 me = await client.get("/api/auth/me")
             assert me.status_code == 200
             assert me.json()["email"] == user.email
+
+            monkeypatch.setattr(limiter, "enabled", False)
+            with (
+                patch("app.api.auth.register_manual_user", new=AsyncMock(return_value=(user, tokens))),
+                patch("app.api.auth.build_user_response", new=AsyncMock(return_value=user_resp)),
+            ):
+                reg_ok = await client.post(
+                    "/api/auth/register",
+                    json={"name": "Alex", "email": user.email, "password": "Password1"},
+                )
+            assert reg_ok.status_code == 201
+            assert reg_ok.json()["tokens"]["access_token"] == "acc"
+
+            with patch(
+                "app.api.auth.register_manual_user",
+                new=AsyncMock(side_effect=ConflictError("An account with this email already exists")),
+            ):
+                reg_dup = await client.post(
+                    "/api/auth/register",
+                    json={"name": "Alex", "email": user.email, "password": "Password1"},
+                )
+            assert reg_dup.status_code == 409
+
+            with (
+                patch("app.api.auth.authenticate_manual_user", new=AsyncMock(return_value=(user, tokens))),
+                patch("app.api.auth.build_user_response", new=AsyncMock(return_value=user_resp)),
+            ):
+                login_ok = await client.post(
+                    "/api/auth/login",
+                    json={"email": user.email, "password": "Password1"},
+                )
+            assert login_ok.status_code == 200
+            assert login_ok.json()["tokens"]["refresh_token"] == "ref"
+
+            with patch(
+                "app.api.auth.authenticate_manual_user",
+                new=AsyncMock(side_effect=UnauthorizedError("Invalid email or password")),
+            ):
+                login_fail = await client.post(
+                    "/api/auth/login",
+                    json={"email": user.email, "password": "WrongPassword1"},
+                )
+            assert login_fail.status_code == 401
     finally:
         app.dependency_overrides.clear()

@@ -7,8 +7,10 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.cold_email import GeneratedColdEmail
 from app.models.cover_letter import GeneratedCoverLetter
 from app.models.generated_cv import GeneratedCV
+from app.models.job_application import JobApplication
 from app.models.profile import Profile
 from app.models.user import OAuthAccount, User
 from app.schemas.ats_checker import (
@@ -200,6 +202,51 @@ def make_generated_cover_letter(
     }
     defaults.update(overrides)
     return GeneratedCoverLetter(**defaults)
+
+
+def make_generated_cold_email(
+    user_id: uuid.UUID | None = None, **overrides: object
+) -> GeneratedColdEmail:
+    defaults = {
+        "id": uuid.uuid4(),
+        "user_id": user_id or uuid.uuid4(),
+        "profile_id": uuid.uuid4(),
+        "job_title": "Backend Engineer",
+        "company_name": "Acme Corp",
+        "recruiter_name": "Sarah Jenkins",
+        "job_description": "Looking for a Backend Engineer skilled in Python and FastAPI." * 2,
+        "subject": "Cut API latency 35% — Backend Engineer fit at Acme Corp",
+        "email_body": "Hi Sarah,\n\nI noticed Acme Corp is scaling Python microservices — I recently cut API latency by 35% across 10 services.\n\nOpen to a quick 10-minute chat this week?\n\nBest,\nAlex Candidate",
+        "created_at": datetime.now(timezone.utc),
+    }
+    defaults.update(overrides)
+    return GeneratedColdEmail(**defaults)
+
+
+def make_job_application(
+    user_id: uuid.UUID | None = None, **overrides: object
+) -> JobApplication:
+    now = datetime.now(timezone.utc)
+    defaults = {
+        "id": uuid.uuid4(),
+        "user_id": user_id or uuid.uuid4(),
+        "company_name": "Acme Corp",
+        "role_title": "Backend Engineer",
+        "job_url": "https://acme.example.com/jobs/1",
+        "status": "applied",
+        "applied_date": now.date(),
+        "work_mode": "hybrid",
+        "location": "Singapore",
+        "salary_range": "$140k - $170k",
+        "recruiter_name": "Sarah Jenkins",
+        "recruiter_contact": "sarah@acme.example.com",
+        "next_follow_up_date": None,
+        "notes": "Submitted tailored CV and cover letter.",
+        "created_at": now,
+        "updated_at": now,
+    }
+    defaults.update(overrides)
+    return JobApplication(**defaults)
 
 
 def make_job_requirements(**overrides: object) -> JobRequirements:

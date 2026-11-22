@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from app.security.sanitizer import sanitize_text
 
-DocumentType = Literal["cv", "cover_letter"]
+DocumentType = Literal["cv", "cover_letter", "cold_email"]
 
 JOB_DESCRIPTION_MIN_LENGTH = 50
 JOB_DESCRIPTION_MAX_LENGTH = 2500
@@ -41,6 +41,7 @@ class DocumentHistoryItem(BaseModel):
     document_type: DocumentType
     job_title: str | None = None
     company_name: str | None = None
+    recruiter_name: str | None = None
     ats_score: float | None = None
     created_at: datetime
 

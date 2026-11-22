@@ -5,10 +5,11 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.core.exceptions import UnauthorizedError
-from app.schemas.user import OAuthVerifyRequest
+from app.core.exceptions import ConflictError, UnauthorizedError
+from app.schemas.user import LoginRequest, OAuthVerifyRequest, RegisterRequest
 from app.security.encryption import decrypt_secret
 from app.security.jwt import create_token_pair
+from app.security.password import hash_password
 from app.services import auth_service
 from tests.conftest import make_oauth_account, make_user
 
@@ -99,3 +100,68 @@ async def test_refresh_access_tokens_paths(mock_db):
     ):
         with pytest.raises(UnauthorizedError, match="deactivated"):
             await auth_service.refresh_access_tokens(mock_db, "tok")
+
+
+@pytest.mark.asyncio
+async def test_register_and_authenticate_manual_user(mock_db):
+    new_user = make_user(email="manual@example.com", name="Manual User")
+    reg_req = RegisterRequest(
+        name="Manual User",
+        email="manual@example.com",
+        password="Password1",
+    )
+
+    with (
+        patch("app.services.auth_service.user_repo.get_user_by_email", new=AsyncMock(return_value=None)),
+        patch("app.services.auth_service.user_repo.create_user", new=AsyncMock(return_value=new_user)) as mock_create,
+        patch("app.services.auth_service.user_repo.flush_changes", new=AsyncMock()),
+    ):
+        created_user, tokens = await auth_service.register_manual_user(mock_db, reg_req)
+    assert created_user is new_user
+    assert tokens["access_token"]
+    assert mock_create.call_args.kwargs["hashed_password"] != "Password1"
+
+    # Duplicate email -> ConflictError
+    with patch("app.services.auth_service.user_repo.get_user_by_email", new=AsyncMock(return_value=new_user)):
+        with pytest.raises(ConflictError, match="already exists"):
+            await auth_service.register_manual_user(mock_db, reg_req)
+
+    # Authenticate manual user
+    pw_user = make_user(
+        email="manual@example.com",
+        hashed_password=hash_password("Password1"),
+        is_active=True,
+    )
+    login_req = LoginRequest(email="manual@example.com", password="Password1")
+
+    with patch("app.services.auth_service.user_repo.get_user_by_email", new=AsyncMock(return_value=pw_user)):
+        authed, auth_tokens = await auth_service.authenticate_manual_user(mock_db, login_req)
+    assert authed is pw_user
+    assert auth_tokens["refresh_token"]
+
+    # Wrong password -> UnauthorizedError
+    bad_login = LoginRequest(email="manual@example.com", password="WrongPassword1")
+    with patch("app.services.auth_service.user_repo.get_user_by_email", new=AsyncMock(return_value=pw_user)):
+        with pytest.raises(UnauthorizedError, match="Invalid email or password"):
+            await auth_service.authenticate_manual_user(mock_db, bad_login)
+
+    # Missing user -> UnauthorizedError
+    with patch("app.services.auth_service.user_repo.get_user_by_email", new=AsyncMock(return_value=None)):
+        with pytest.raises(UnauthorizedError, match="Invalid email or password"):
+            await auth_service.authenticate_manual_user(mock_db, login_req)
+
+    # OAuth-only user (no password) -> UnauthorizedError
+    oauth_only = make_user(email="oauth@example.com", hashed_password=None)
+    with patch("app.services.auth_service.user_repo.get_user_by_email", new=AsyncMock(return_value=oauth_only)):
+        with pytest.raises(UnauthorizedError, match="Invalid email or password"):
+            await auth_service.authenticate_manual_user(mock_db, login_req)
+
+    # Inactive user -> UnauthorizedError
+    inactive_pw = make_user(
+        email="manual@example.com",
+        hashed_password=hash_password("Password1"),
+        is_active=False,
+    )
+    with patch("app.services.auth_service.user_repo.get_user_by_email", new=AsyncMock(return_value=inactive_pw)):
+        with pytest.raises(UnauthorizedError, match="deactivated"):
+            await auth_service.authenticate_manual_user(mock_db, login_req)

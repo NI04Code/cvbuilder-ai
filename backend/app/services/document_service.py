@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import BadRequestError, NotFoundError
 from app.database import document_repo, profile_repo
+from app.models.cold_email import GeneratedColdEmail
 from app.models.cover_letter import GeneratedCoverLetter
 from app.models.generated_cv import GeneratedCV
 from app.models.profile import Profile
@@ -157,6 +158,23 @@ async def list_unified_documents(
                     company_name=cl.company_name,
                     ats_score=None,
                     created_at=cl.created_at,
+                )
+            )
+
+    if document_type in (None, "cold_email"):
+        cold_emails = await document_repo.list_by_user(
+            db, GeneratedColdEmail, user_id, limit=fetch_cap, offset=0
+        )
+        for ce in cold_emails:
+            items.append(
+                DocumentHistoryItem(
+                    id=ce.id,
+                    document_type="cold_email",
+                    job_title=ce.job_title,
+                    company_name=ce.company_name,
+                    recruiter_name=ce.recruiter_name,
+                    ats_score=None,
+                    created_at=ce.created_at,
                 )
             )
 

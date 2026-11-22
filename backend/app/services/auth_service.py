@@ -1,15 +1,64 @@
-"""Authentication business logic — user creation, OAuth account linking, and token refresh."""
+"""Authentication business logic — manual registration/login, OAuth linking, and token refresh."""
 
+import asyncio
 import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import UnauthorizedError
+from app.core.exceptions import ConflictError, UnauthorizedError
 from app.database import profile_repo, user_repo
 from app.models.user import User
-from app.schemas.user import OAuthVerifyRequest, TokenResponse, UserResponse
+from app.schemas.user import (
+    LoginRequest,
+    OAuthVerifyRequest,
+    RegisterRequest,
+    TokenResponse,
+    UserResponse,
+)
 from app.security.encryption import encrypt_secret
 from app.security.jwt import create_token_pair, decode_token
+from app.security.password import hash_password, verify_password
+
+
+async def register_manual_user(
+    db: AsyncSession,
+    data: RegisterRequest,
+) -> tuple[User, dict]:
+    """Create a new manual email/password user account and issue JWT tokens."""
+    existing = await user_repo.get_user_by_email(db, data.email)
+    if existing is not None:
+        raise ConflictError("An account with this email already exists")
+
+    hashed = await asyncio.to_thread(hash_password, data.password)
+    user = await user_repo.create_user(
+        db,
+        email=data.email,
+        name=data.name,
+        hashed_password=hashed,
+    )
+    await user_repo.flush_changes(db)
+
+    token_pair = create_token_pair(str(user.id), user.email)
+    return user, token_pair
+
+
+async def authenticate_manual_user(
+    db: AsyncSession,
+    data: LoginRequest,
+) -> tuple[User, dict]:
+    """Authenticate an email/password user and issue JWT tokens."""
+    user = await user_repo.get_user_by_email(db, data.email)
+    stored_hash = user.hashed_password if user else None
+
+    password_valid = await asyncio.to_thread(verify_password, data.password, stored_hash)
+    if user is None or not password_valid:
+        raise UnauthorizedError("Invalid email or password")
+
+    if not user.is_active:
+        raise UnauthorizedError("User account is deactivated")
+
+    token_pair = create_token_pair(str(user.id), user.email)
+    return user, token_pair
 
 
 async def get_or_create_oauth_user(

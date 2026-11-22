@@ -7,7 +7,7 @@ from app.database.session import (
     engine,
     get_db,
 )
-from app.database import document_repo, profile_repo, user_repo
+from app.database import document_repo, job_applications_repo, profile_repo, user_repo
 
 __all__ = [
     "Base",
@@ -16,6 +16,7 @@ __all__ = [
     "document_repo",
     "engine",
     "get_db",
+    "job_applications_repo",
     "profile_repo",
     "user_repo",
 ]

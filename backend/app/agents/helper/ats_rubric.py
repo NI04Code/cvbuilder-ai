@@ -1080,11 +1080,23 @@ def parse_cv_to_structured(raw_text: str) -> ParsedCVDocument:
     return parsed
 
 
-def grade_parsed_cv(doc: ParsedCVDocument, target_role: str | None = None) -> ATSCheckResult:
+def grade_parsed_cv(
+    doc: ParsedCVDocument,
+    target_role: str | None = None,
+    company_name: str | None = None,
+    job_description: str | None = None,
+) -> ATSCheckResult:
     """Grade a structured ParsedCVDocument JSON using the unified ATS rubric and 24h TTL cache."""
     clean_role = target_role.strip()[:120] if target_role and target_role.strip() else None
+    clean_company = company_name.strip()[:120] if company_name and company_name.strip() else None
+    clean_jd = job_description.strip()[:2500] if job_description and job_description.strip() else None
     canonical_json = doc.model_dump_json()
-    cache_payload = f"{canonical_json}|role={clean_role.lower() if clean_role else ''}"
+    jd_hash = hashlib.sha256(clean_jd.encode("utf-8")).hexdigest() if clean_jd else ""
+    cache_payload = (
+        f"{canonical_json}|role={clean_role.lower() if clean_role else ''}"
+        f"|company={clean_company.lower() if clean_company else ''}"
+        f"|jd={jd_hash}"
+    )
     cache_key = hashlib.sha256(cache_payload.encode("utf-8")).hexdigest()
     cached = _cache_get(_ATS_CACHE, cache_key)
     if cached is not None:
@@ -1097,13 +1109,21 @@ def grade_parsed_cv(doc: ParsedCVDocument, target_role: str | None = None) -> AT
         if clean_role
         else "TARGET ROLE: Inferred from CV (grade domain relevance & credential strength against primary role)"
     )
+    context_lines = [role_line]
+    if clean_company:
+        context_lines.append(f"TARGET COMPANY: {clean_company}")
+    if clean_jd:
+        context_lines.append(
+            f"TARGET JOB DESCRIPTION (prioritize keyword coverage and requirement alignment against this JD):\n{clean_jd}"
+        )
+    target_context = "\n".join(context_lines)
 
     structured_llm = get_structured_llm(ATSCheckResult, temperature=0)
     messages = [
         SystemMessage(content=ATS_SCORING_RUBRIC),
         HumanMessage(
             content=(
-                f"{role_line}\n\n"
+                f"{target_context}\n\n"
                 f"{fact_sheet}\n\n"
                 f"PARSED CV JSON:\n{doc.model_dump_json(exclude_none=True)}"
             )
@@ -1118,6 +1138,7 @@ def grade_parsed_cv(doc: ParsedCVDocument, target_role: str | None = None) -> AT
         facts=facts,
     )
     scored.target_role = clean_role
+    scored.company_name = clean_company
 
     _cache_set(_ATS_CACHE, cache_key, scored)
     return scored

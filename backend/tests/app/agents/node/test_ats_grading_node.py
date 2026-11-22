@@ -23,9 +23,22 @@ def test_grade_cv_node():
 
     doc = make_parsed_cv_doc()
     res = make_ats_check_result()
-    with patch("app.agents.node.ats_grading_node.grade_parsed_cv", return_value=res):
-        out = grade_cv_node({"parsed_cv": doc, "target_role": "SWE"})
+    with patch("app.agents.node.ats_grading_node.grade_parsed_cv", return_value=res) as mock_grade:
+        out = grade_cv_node(
+            {
+                "parsed_cv": doc,
+                "target_role": "SWE",
+                "company_name": "Acme",
+                "job_description": "Python APIs",
+            }
+        )
     assert out["result"] is res
+    mock_grade.assert_called_once_with(
+        doc,
+        target_role="SWE",
+        company_name="Acme",
+        job_description="Python APIs",
+    )
 
     with patch("app.agents.node.ats_grading_node.grade_parsed_cv", side_effect=RuntimeError("fail")):
         err = grade_cv_node({"parsed_cv": doc})

@@ -71,3 +71,6 @@ class Profile(Base):
     generated_cover_letters: Mapped[list["GeneratedCoverLetter"]] = relationship(  # type: ignore[name-defined]
         back_populates="profile", lazy="selectin"
     )
+    generated_cold_emails: Mapped[list["GeneratedColdEmail"]] = relationship(  # type: ignore[name-defined]
+        back_populates="profile", lazy="selectin"
+    )

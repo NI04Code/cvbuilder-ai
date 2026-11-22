@@ -6,6 +6,7 @@ from fastapi import FastAPI
 
 from app.core.exceptions import (
     BadRequestError,
+    ConflictError,
     GenerationError,
     NotFoundError,
     UnauthorizedError,
@@ -30,6 +31,10 @@ async def test_register_exception_handlers_maps_all_errors():
     async def missing():
         raise NotFoundError("not here")
 
+    @test_app.get("/conflict")
+    async def conflict():
+        raise ConflictError("already exists")
+
     @test_app.get("/gen")
     async def gen():
         raise GenerationError("llm down")
@@ -43,12 +48,14 @@ async def test_register_exception_handlers_maps_all_errors():
         r_bad = await client.get("/bad")
         r_unauth = await client.get("/unauth")
         r_missing = await client.get("/missing")
+        r_conflict = await client.get("/conflict")
         r_gen = await client.get("/gen")
         r_boom = await client.get("/boom")
 
     assert r_bad.status_code == 400 and r_bad.json()["detail"] == "bad input"
     assert r_unauth.status_code == 401 and r_unauth.headers["WWW-Authenticate"] == "Bearer"
     assert r_missing.status_code == 404 and r_missing.json()["detail"] == "not here"
+    assert r_conflict.status_code == 409 and r_conflict.json()["detail"] == "already exists"
     assert r_gen.status_code == 500 and r_gen.json()["detail"] == "llm down"
     assert r_boom.status_code == 500
     assert "sensitive internal trace" not in r_boom.text

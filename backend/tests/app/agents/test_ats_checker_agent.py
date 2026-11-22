@@ -26,7 +26,15 @@ async def test_check_cv_ats_invokes_graph():
         "app.agents.ats_checker_agent.ats_checker_app.invoke",
         return_value={"result": expected, "error": None},
     ) as mock_invoke:
-        out = await check_cv_ats(b"%PDF-1.4", target_role="  Backend Engineer  ")
+        out = await check_cv_ats(
+            b"%PDF-1.4",
+            target_role="  Backend Engineer  ",
+            company_name="  Acme Corp  ",
+            job_description="  FastAPI & Postgres  ",
+        )
 
     assert out == {"result": expected, "error": None}
-    assert mock_invoke.call_args.args[0]["target_role"] == "Backend Engineer"
+    invoked_state = mock_invoke.call_args.args[0]
+    assert invoked_state["target_role"] == "Backend Engineer"
+    assert invoked_state["company_name"] == "Acme Corp"
+    assert invoked_state["job_description"] == "FastAPI & Postgres"

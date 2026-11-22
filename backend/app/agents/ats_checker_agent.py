@@ -13,6 +13,8 @@ from app.schemas.ats_checker import ATSCheckResult, ParsedCVDocument
 class ATSCheckerState(TypedDict):
     file_bytes: bytes
     target_role: str | None
+    company_name: str | None
+    job_description: str | None
     raw_text: str
     parsed_cv: ParsedCVDocument | None
     result: ATSCheckResult | None
@@ -50,11 +52,20 @@ workflow.add_edge("grade_cv", END)
 ats_checker_app = workflow.compile()
 
 
-async def check_cv_ats(file_bytes: bytes, target_role: str | None = None) -> dict:
+async def check_cv_ats(
+    file_bytes: bytes,
+    target_role: str | None = None,
+    company_name: str | None = None,
+    job_description: str | None = None,
+) -> dict:
     """Run the ATS checker graph on raw PDF bytes (in-memory, no disk I/O)."""
     initial_state: ATSCheckerState = {
         "file_bytes": file_bytes,
         "target_role": target_role.strip() if target_role and target_role.strip() else None,
+        "company_name": company_name.strip() if company_name and company_name.strip() else None,
+        "job_description": (
+            job_description.strip() if job_description and job_description.strip() else None
+        ),
         "raw_text": "",
         "parsed_cv": None,
         "result": None,

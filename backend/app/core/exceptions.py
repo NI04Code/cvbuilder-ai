@@ -28,6 +28,10 @@ class NotFoundError(ServiceError):
     """Raised when a requested resource does not exist or is not owned by the caller."""
 
 
+class ConflictError(ServiceError):
+    """Raised when attempting to create a resource that violates a uniqueness constraint."""
+
+
 class GenerationError(ServiceError):
     """Raised when AI workflow execution or PDF rendering fails."""
 
@@ -54,6 +58,13 @@ def register_exception_handlers(app: FastAPI) -> None:
     async def not_found_error_handler(request: Request, exc: NotFoundError):
         return JSONResponse(
             status_code=status.HTTP_404_NOT_FOUND,
+            content={"detail": exc.detail},
+        )
+
+    @app.exception_handler(ConflictError)
+    async def conflict_error_handler(request: Request, exc: ConflictError):
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
             content={"detail": exc.detail},
         )
 

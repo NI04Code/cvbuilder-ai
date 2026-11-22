@@ -190,6 +190,7 @@ class ATSCheckResult(BaseModel):
     overall_score: int = Field(..., ge=0, le=100, description="Weighted overall score 0-100")
     candidate_level: str = Field(..., description="'Entry-Level', 'Mid-Level', 'Senior', or 'Executive'")
     target_role: str | None = Field(default=None, description="Evaluated target job role if specified")
+    company_name: str | None = Field(default=None, description="Evaluated target company if specified")
     sections: list[ATSSectionScore] = Field(..., description="Scored breakdown of evaluated sections")
     keyword_analysis: ATSKeywordAnalysis
     formatting_issues: list[ATSFormattingIssue] = Field(default_factory=list, description="Concrete formatting defects ([] if clean)")

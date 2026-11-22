@@ -26,9 +26,11 @@ async def test_create_user_and_flush(mock_db):
         email="new@example.com",
         name="New User",
         avatar_url=None,
+        hashed_password="$2b$12$hashedvalue",
     )
     assert user.email == "new@example.com"
     assert user.is_active is True
+    assert user.hashed_password == "$2b$12$hashedvalue"
     mock_db.add.assert_called_once_with(user)
     mock_db.flush.assert_awaited_once()
 

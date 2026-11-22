@@ -1,5 +1,11 @@
 """Pydantic schema exports."""
 
+from app.schemas.job_applications import (
+    ApplicationCreateRequest,
+    ApplicationResponse,
+    ApplicationStatsResponse,
+    ApplicationUpdateRequest,
+)
 from app.schemas.cv import (
     CVGenerateRequest,
     CVListItem,
@@ -14,7 +20,9 @@ from app.schemas.profile import (
 )
 from app.schemas.user import (
     AuthResponse,
+    LoginRequest,
     OAuthVerifyRequest,
+    RegisterRequest,
     TokenRefreshRequest,
     TokenResponse,
     UserResponse,
@@ -22,6 +30,8 @@ from app.schemas.user import (
 
 __all__ = [
     "OAuthVerifyRequest",
+    "RegisterRequest",
+    "LoginRequest",
     "TokenRefreshRequest",
     "TokenResponse",
     "UserResponse",
@@ -34,4 +44,8 @@ __all__ = [
     "CVListItem",
     "TailoredCV",
     "JobRequirements",
+    "ApplicationCreateRequest",
+    "ApplicationUpdateRequest",
+    "ApplicationResponse",
+    "ApplicationStatsResponse",
 ]

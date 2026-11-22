@@ -11,7 +11,9 @@ from app.database import get_db
 from app.models.user import User
 from app.schemas.user import (
     AuthResponse,
+    LoginRequest,
     OAuthVerifyRequest,
+    RegisterRequest,
     TokenRefreshRequest,
     TokenResponse,
     UserResponse,
@@ -19,9 +21,11 @@ from app.schemas.user import (
 from app.security.jwt import get_current_user
 from app.security.rate_limiter import limiter
 from app.services.auth_service import (
+    authenticate_manual_user,
     build_user_response,
     get_or_create_oauth_user,
     refresh_access_tokens,
+    register_manual_user,
 )
 
 logger = logging.getLogger(__name__)
@@ -50,6 +54,46 @@ def verify_internal_auth_secret(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid internal authentication secret",
         )
+
+
+@router.post(
+    "/register",
+    response_model=AuthResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Register a new user with email and password",
+)
+@limiter.limit("5/minute")
+async def register(
+    request: Request,
+    data: RegisterRequest,
+    db: AsyncSession = Depends(get_db),
+) -> AuthResponse:
+    """Create a new user account with email/password and return JWT tokens."""
+    user, token_pair = await register_manual_user(db, data)
+    return AuthResponse(
+        user=await build_user_response(db, user),
+        tokens=TokenResponse(**token_pair),
+    )
+
+
+@router.post(
+    "/login",
+    response_model=AuthResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Authenticate with email and password",
+)
+@limiter.limit("10/minute")
+async def login(
+    request: Request,
+    data: LoginRequest,
+    db: AsyncSession = Depends(get_db),
+) -> AuthResponse:
+    """Verify email/password credentials and return user data + JWT tokens."""
+    user, token_pair = await authenticate_manual_user(db, data)
+    return AuthResponse(
+        user=await build_user_response(db, user),
+        tokens=TokenResponse(**token_pair),
+    )
 
 
 @router.post(

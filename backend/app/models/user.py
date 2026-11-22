@@ -51,6 +51,12 @@ class User(Base):
     generated_cover_letters: Mapped[list["GeneratedCoverLetter"]] = relationship(  # type: ignore[name-defined]
         back_populates="user", cascade="all, delete-orphan", lazy="raise"
     )
+    generated_cold_emails: Mapped[list["GeneratedColdEmail"]] = relationship(  # type: ignore[name-defined]
+        back_populates="user", cascade="all, delete-orphan", lazy="raise"
+    )
+    job_applications: Mapped[list["JobApplication"]] = relationship(  # type: ignore[name-defined]
+        back_populates="user", cascade="all, delete-orphan", lazy="raise"
+    )
 
 
 class OAuthAccount(Base):

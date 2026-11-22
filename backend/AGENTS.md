@@ -10,11 +10,11 @@ This document defines the mandatory coding standards, architectural boundaries, 
 
 The backend follows a strict **3-layer architecture** (`api` → `services` → `database`) backed by `core/`, `security/`, `utils/`, `models/`, `schemas/`, and `agents/`:
 
-- **`app/api/` (Layer 1 — HTTP Controllers)**: Handle HTTP request parsing, Pydantic validation, pagination params (`limit`/`offset`), auth dependencies (`Depends(get_current_user)`, `verify_internal_auth_secret`), rate limiting (`@limiter.limit`), upload HTTP checks (MIME, size, `%PDF-` magic bytes), and HTTP responses (`FileResponse`, status codes). Keep route handlers thin—never place business logic or SQLAlchemy `select`/`execute` calls here.
+- **`app/api/` (Layer 1 — HTTP Controllers)**: Handle HTTP request parsing, Pydantic validation, pagination params (`limit`/`offset`), auth dependencies (`Depends(get_current_user)`, `verify_internal_auth_secret`), rate limiting (`@limiter.limit`), upload HTTP checks (MIME, size, `%PDF-` magic bytes), and HTTP responses (`FileResponse`, status codes). Includes `auth` (`/api/auth/register`, `/api/auth/login`, `/api/auth/verify`, `/api/auth/refresh`, `/api/auth/me`), `profile`, `resume_parser`, `cv`, `cover_letter`, `cold_email` (`/api/cold-emails`), `documents`, `job_applications` (`/api/job-applications`), and `ats_checker` (`/api/ats-checker/analyze` with optional `target_role`, `company_name`, `job_description`) routes. Keep route handlers thin—never place business logic or SQLAlchemy `select`/`execute` calls here.
 - **`app/services/` (Layer 2 — Business Logic & Orchestration)**: House all business logic, AI agent orchestration, PDF generation orchestration, date sorting, orphan file cleanup, and domain exception raising (`BadRequestError`, `UnauthorizedError`, `NotFoundError`, `GenerationError`). Services must **never** contain raw SQLAlchemy `select(...)`/`db.execute(...)` queries or FastAPI HTTP response construction.
 - **`app/database/` (Layer 3 — Session & Repositories)**: Owns all database connectivity and queries:
   - `session.py`: Async engine, `async_session_factory`, `Base`, `get_db()`, and `check_db_connection()`.
-  - `user_repo.py`, `profile_repo.py`, `document_repo.py`: All SQLAlchemy 2.x `select`, `add`, `delete`, `flush`, `commit`, and `refresh` operations.
+  - `user_repo.py`, `profile_repo.py`, `document_repo.py`, `job_applications_repo.py`: All SQLAlchemy 2.x `select`, `add`, `delete`, `flush`, `commit`, and `refresh` operations (covering `User`, `OAuthAccount`, `Profile`, `GeneratedCV`, `GeneratedCoverLetter`, `GeneratedColdEmail`, and `JobApplication`).
 - **`app/core/` (Cross-Cutting Application Primitives)**:
   - `settings.py`: `pydantic-settings` configuration (`Settings`, `settings`), including `validate_production_secrets()`.
   - `logging.py`: Centralized logging (`configure_logging`) with `X-Request-ID` `ContextVar` correlation (`request_id_var`).
@@ -25,6 +25,7 @@ The backend follows a strict **3-layer architecture** (`api` → `services` → 
 - **`app/agents/` (LangGraph & LLM Workflows)**: Encapsulate prompt engineering, `StateGraph` workflows, nodes (`app/agents/node/`), and helpers (`app/agents/helper/`). Always obtain LLM clients via `app/agents/helper/llm_factory.py` (`get_llm`, `get_structured_llm`) to preserve explicit timeouts, retries, and `.with_fallbacks(...)`.
 - **`app/security/` (Auth, Crypto, Sanitization & Rate Limiting)**:
   - `jwt.py`: Access/refresh JWT creation/decoding and `get_current_user` (delegating DB lookup to `user_repo`).
+  - `password.py`: Bcrypt password hashing and constant-time verification via `pwdlib` (always offloaded with `asyncio.to_thread(...)` in `auth_service`).
   - `encryption.py`: Fernet symmetric encryption (`encrypt_secret`, `decrypt_secret`) for sensitive tokens stored at rest (`OAuthAccount.access_token`).
   - `sanitizer.py`: Input sanitization (`bleach`-based `sanitize_text`), `sanitize_filename`, and `is_pdf_magic_bytes`.
   - `rate_limiter.py`: `slowapi` IP-based `limiter`.
@@ -84,7 +85,7 @@ Every backend change must uphold the following security invariants:
 ### 4.1 Authentication, Authorization & IDOR Prevention
 - All endpoints accessing user data must require `current_user: User = Depends(get_current_user)`.
 - Server-to-server `POST /api/auth/verify` calls from NextAuth must pass `verify_internal_auth_secret` (`X-Internal-Auth-Secret` verified with `hmac.compare_digest`).
-- **Strict Ownership Scoping (Anti-IDOR)**: Every query or mutation on user-owned records (`Profile`, `GeneratedCV`, `GeneratedCoverLetter`, uploaded/generated PDFs) **must** filter by `Model.user_id == user_id` in the SQL `WHERE` clause via `app/database/` repositories. Never fetch a resource by primary key (`id`) alone.
+- **Strict Ownership Scoping (Anti-IDOR)**: Every query or mutation on user-owned records (`Profile`, `GeneratedCV`, `GeneratedCoverLetter`, `GeneratedColdEmail`, `JobApplication`, uploaded/generated PDFs) **must** filter by `Model.user_id == user_id` in the SQL `WHERE` clause via `app/database/` repositories. Never fetch a resource by primary key (`id`) alone.
 - Verify token `type` (`"access"` vs `"refresh"`), validate UUID subjects, and confirm `user.is_active` before granting access.
 - Encrypt third-party OAuth `access_token` values at rest using `app.security.encryption.encrypt_secret` before persisting to `OAuthAccount`.
 

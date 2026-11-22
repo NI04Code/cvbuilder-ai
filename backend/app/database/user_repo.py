@@ -25,7 +25,8 @@ async def create_user(
     *,
     email: str,
     name: str,
-    avatar_url: str | None,
+    avatar_url: str | None = None,
+    hashed_password: str | None = None,
 ) -> User:
     """Persist a new User record and flush to obtain its ID."""
     user = User(
@@ -33,6 +34,7 @@ async def create_user(
         email=email,
         name=name,
         avatar_url=avatar_url,
+        hashed_password=hashed_password,
         is_active=True,
     )
     db.add(user)
