@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useState, useRef, DragEvent, ChangeEvent, ReactNode, useCallback } from "react";
+import { useEffect, useState, useRef, DragEvent, ChangeEvent, ReactNode, useCallback, Suspense } from "react";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   UserCircle,
   Briefcase,
@@ -16,6 +18,7 @@ import {
   ArrowUp,
   ArrowDown,
   ArrowDownWideNarrow,
+  ArrowRight,
   AlertCircle,
   CheckCircle,
   Award,
@@ -25,6 +28,7 @@ import {
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { apiClient } from "@/lib/api";
+import { clearProfileOnboardingSkipped, markProfileOnboardingSkipped } from "@/lib/onboarding";
 import styles from "./page.module.css";
 
 type TabId = "profile" | "import";
@@ -37,8 +41,11 @@ const DEFAULT_MANUAL_ORDER: ManualOrderPrefs = {
   certifications: false,
 };
 
-export default function ProfilePage() {
+function ProfilePageContent() {
   const { data: session, status, update } = useSession();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const isOnboarding = searchParams.get("onboarding") === "1";
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabId>("profile");
@@ -128,6 +135,7 @@ export default function ProfilePage() {
         headers: { "Content-Type": "multipart/form-data", Authorization: `Bearer ${token}` },
       });
       writeManualOrderPref(uploadResponse.data?.user_id || profile?.user_id, DEFAULT_MANUAL_ORDER);
+      clearProfileOnboardingSkipped(session?.user?.id);
       await update({ hasProfile: true });
       await fetchProfile();
       setMessage({ type: "success", text: "Resume parsed into your base profile." });
@@ -192,6 +200,7 @@ export default function ProfilePage() {
       setDragSource(null);
       setDragOverTarget(null);
       setMessage({ type: "success", text: "Profile changes saved." });
+      clearProfileOnboardingSkipped(session?.user?.id);
       await update({ hasProfile: true });
     } catch (err: any) {
       setMessage({ type: "error", text: err.response?.data?.detail || "Failed to save profile." });
@@ -200,12 +209,17 @@ export default function ProfilePage() {
     }
   };
 
+  const handleSkipOnboarding = () => {
+    markProfileOnboardingSkipped(session?.user?.id);
+    router.push("/dashboard");
+  };
+
   const startEditing = () => {
     if (!formData) {
       setFormData({
         personal_info: {
-          name: "",
-          email: "",
+          name: session?.user?.name || "",
+          email: session?.user?.email || "",
           phone: "",
           location: "",
           linkedin_url: "",
@@ -248,10 +262,18 @@ export default function ProfilePage() {
       <div className={styles.container}>
         <header className={styles.header}>
           <div>
-            <h1 className={styles.title}>Base Career Profile</h1>
+            <h1 className={styles.title}>
+              {isOnboarding ? "Set Up Your Base Career Profile" : "Base Career Profile"}
+            </h1>
             <p className={styles.subtitle}>
-              Import an existing PDF resume or enter your work history manually.
+              Import an existing PDF resume or enter your work history manually. You can skip this for now and complete it later.
             </p>
+          </div>
+          <div className={styles.saveBar}>
+            <button type="button" className={styles.cancelBtn} onClick={handleSkipOnboarding}>
+              <span>Skip for now</span>
+              <ArrowRight size={15} strokeWidth={1.75} />
+            </button>
           </div>
         </header>
 
@@ -318,12 +340,25 @@ export default function ProfilePage() {
         {activeTab === "profile" && (
           <div className={styles.saveBar}>
             {!editing ? (
-              <button className={styles.editBtn} onClick={startEditing}>
-                <Pencil size={15} strokeWidth={1.75} />
-                <span>Edit Profile</span>
-              </button>
+              <>
+                <button className={styles.editBtn} onClick={startEditing}>
+                  <Pencil size={15} strokeWidth={1.75} />
+                  <span>Edit Profile</span>
+                </button>
+                {isOnboarding && (
+                  <Link href="/dashboard" className={styles.saveBtn}>
+                    <span>Continue to Dashboard</span>
+                    <ArrowRight size={15} strokeWidth={1.75} />
+                  </Link>
+                )}
+              </>
             ) : (
               <>
+                {!profile && (
+                  <button type="button" className={styles.cancelBtn} onClick={handleSkipOnboarding}>
+                    <span>Skip for now</span>
+                  </button>
+                )}
                 <button className={styles.cancelBtn} onClick={cancelEditing}>
                   Cancel
                 </button>
@@ -1885,4 +1920,19 @@ function getPlaceholder(key: string): string {
     other_url: "https://github.com/... (GitHub, Kaggle, etc.)",
   };
   return map[key] || "";
+}
+
+export default function ProfilePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className={styles.loadingState}>
+          <div className={styles.spinner} />
+          <p>Loading your base profile…</p>
+        </div>
+      }
+    >
+      <ProfilePageContent />
+    </Suspense>
+  );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { FileSignature, Mail, Download, Eye, AlertCircle, Check, ArrowRight } from "lucide-react";
+import { FileSignature, Mail, Send, Download, Copy, Eye, AlertCircle, Check, ArrowRight } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { apiClient, DocumentType, downloadDocumentPdf } from "@/lib/api";
 import { useDocumentGeneration } from "@/context/DocumentGenerationContext";
@@ -19,11 +19,14 @@ export function DocumentGeneratorWorkspace({
   const {
     isGeneratingCv,
     isGeneratingCoverLetter,
+    isGeneratingColdEmail,
     cvError,
     coverLetterError,
+    coldEmailError,
     formData,
     generatedCv,
     generatedCoverLetter,
+    generatedColdEmail,
     setFormData,
     startGeneration,
   } = useDocumentGeneration();
@@ -31,6 +34,7 @@ export function DocumentGeneratorWorkspace({
   const [mode, setMode] = useState<DocumentType>(initialMode);
   const [hasProfile, setHasProfile] = useState<boolean | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [copiedColdEmail, setCopiedColdEmail] = useState(false);
 
   useEffect(() => {
     setMode(initialMode);
@@ -56,9 +60,30 @@ export function DocumentGeneratorWorkspace({
   }, [status, session, update]);
 
   const isCoverLetterMode = mode === "cover_letter";
-  const isGenerating = isCoverLetterMode ? isGeneratingCoverLetter : isGeneratingCv;
-  const error = isCoverLetterMode ? coverLetterError : cvError;
-  const activeDoc = isCoverLetterMode ? generatedCoverLetter : generatedCv;
+  const isColdEmailMode = mode === "cold_email";
+  const isGenerating = isColdEmailMode
+    ? isGeneratingColdEmail
+    : isCoverLetterMode
+      ? isGeneratingCoverLetter
+      : isGeneratingCv;
+  const error = isColdEmailMode
+    ? coldEmailError
+    : isCoverLetterMode
+      ? coverLetterError
+      : cvError;
+  const activeDoc = isColdEmailMode
+    ? generatedColdEmail
+    : isCoverLetterMode
+      ? generatedCoverLetter
+      : generatedCv;
+
+  const handleCopyColdEmail = async () => {
+    if (!generatedColdEmail) return;
+    const text = `Subject: ${generatedColdEmail.subject}\n\n${generatedColdEmail.email_body}`;
+    await navigator.clipboard.writeText(text);
+    setCopiedColdEmail(true);
+    setTimeout(() => setCopiedColdEmail(false), 2000);
+  };
 
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -116,6 +141,12 @@ export function DocumentGeneratorWorkspace({
         .map((p) => p.trim())
         .filter(Boolean)
     : [];
+  const coldEmailParagraphs: string[] = generatedColdEmail?.email_body
+    ? String(generatedColdEmail.email_body)
+        .split(/\n\s*\n/)
+        .map((p) => p.trim())
+        .filter(Boolean)
+    : [];
 
   return (
     <div className={styles.container}>
@@ -123,12 +154,18 @@ export function DocumentGeneratorWorkspace({
       <div className={styles.leftPanel}>
         <header className={styles.header}>
           <h1 className={styles.title}>
-            {isCoverLetterMode ? "Write Tailored Cover Letter" : "Tailor CV to Job Posting"}
+            {isColdEmailMode
+              ? "Write Recruiter Cold Email"
+              : isCoverLetterMode
+                ? "Write Tailored Cover Letter"
+                : "Tailor CV to Job Posting"}
           </h1>
           <p className={styles.subtitle}>
-            {isCoverLetterMode
-              ? "Generate a concise one-page cover letter grounded in your profile for this role."
-              : "Paste the target job description to align your profile bullets and skills with required keywords."}
+            {isColdEmailMode
+              ? "Generate a concise, hook-driven outreach message tailored to the recruiter and role."
+              : isCoverLetterMode
+                ? "Generate a concise one-page cover letter grounded in your profile for this role."
+                : "Paste the target job description to align your profile bullets and skills with required keywords."}
           </p>
         </header>
 
@@ -171,6 +208,23 @@ export function DocumentGeneratorWorkspace({
             </div>
           </div>
 
+          {isColdEmailMode && (
+            <div className={styles.formGroup}>
+              <label htmlFor="recruiter_name" className={styles.label}>
+                Recruiter Name
+              </label>
+              <input
+                type="text"
+                id="recruiter_name"
+                name="recruiter_name"
+                value={formData.recruiter_name}
+                onChange={handleChange}
+                placeholder="e.g. Sarah Jenkins (optional)"
+                className={styles.input}
+              />
+            </div>
+          )}
+
           <div className={styles.formGroup}>
             <div className={styles.labelRow}>
               <label htmlFor="job_description" className={styles.label}>
@@ -204,20 +258,28 @@ export function DocumentGeneratorWorkspace({
               <>
                 <span className={styles.btnSpinner} />
                 <span>
-                  {isCoverLetterMode
-                    ? "Drafting Cover Letter…"
-                    : "Tailoring Resume to Job Posting…"}
+                  {isColdEmailMode
+                    ? "Drafting Cold Email…"
+                    : isCoverLetterMode
+                      ? "Drafting Cover Letter…"
+                      : "Tailoring Resume to Job Posting…"}
                 </span>
               </>
             ) : (
               <>
-                {isCoverLetterMode ? (
+                {isColdEmailMode ? (
+                  <Send size={18} strokeWidth={1.75} />
+                ) : isCoverLetterMode ? (
                   <Mail size={18} strokeWidth={1.75} />
                 ) : (
                   <FileSignature size={18} strokeWidth={1.75} />
                 )}
                 <span>
-                  {isCoverLetterMode ? "Generate Cover Letter" : "Generate Tailored CV"}
+                  {isColdEmailMode
+                    ? "Generate Cold Email"
+                    : isCoverLetterMode
+                      ? "Generate Cover Letter"
+                      : "Generate Tailored CV"}
                 </span>
               </>
             )}
@@ -232,37 +294,64 @@ export function DocumentGeneratorWorkspace({
             <Eye size={18} strokeWidth={1.75} />
             <span>
               {activeDoc
-                ? `${activeDoc.job_title || (isCoverLetterMode ? "Cover Letter" : "Tailored CV")}${
-                    activeDoc.company_name ? ` · ${activeDoc.company_name}` : ""
-                  }`
-                : isCoverLetterMode
-                  ? "Cover Letter Preview"
-                  : "Tailored Output Preview"}
+                ? `${
+                    activeDoc.job_title ||
+                    (isColdEmailMode
+                      ? "Cold Email"
+                      : isCoverLetterMode
+                        ? "Cover Letter"
+                        : "Tailored CV")
+                  }${activeDoc.company_name ? ` · ${activeDoc.company_name}` : ""}`
+                : isColdEmailMode
+                  ? "Cold Email Preview"
+                  : isCoverLetterMode
+                    ? "Cover Letter Preview"
+                    : "Tailored Output Preview"}
             </span>
           </div>
           {activeDoc && (
             <div className={styles.actions}>
-              {isCoverLetterMode ? (
-                <div className={styles.coverLetterBadge}>1-Page PDF</div>
+              {isColdEmailMode ? (
+                <>
+                  <div className={styles.coverLetterBadge}>Outreach Message</div>
+                  <button
+                    type="button"
+                    className={styles.downloadBtn}
+                    onClick={handleCopyColdEmail}
+                  >
+                    {copiedColdEmail ? (
+                      <Check size={15} strokeWidth={2} />
+                    ) : (
+                      <Copy size={15} strokeWidth={1.75} />
+                    )}
+                    <span>{copiedColdEmail ? "Copied!" : "Copy Email"}</span>
+                  </button>
+                </>
               ) : (
-                activeDoc.ats_score != null && (
-                  <div className={styles.atsScore} title="Estimated ATS Match Score">
-                    {Math.round(activeDoc.ats_score)}% ATS Match
-                  </div>
-                )
+                <>
+                  {isCoverLetterMode ? (
+                    <div className={styles.coverLetterBadge}>1-Page PDF</div>
+                  ) : (
+                    activeDoc.ats_score != null && (
+                      <div className={styles.atsScore} title="Estimated ATS Match Score">
+                        {Math.round(activeDoc.ats_score)}% ATS Match
+                      </div>
+                    )
+                  )}
+                  <button
+                    className={styles.downloadBtn}
+                    onClick={handleDownloadPdf}
+                    disabled={isDownloading}
+                  >
+                    {isDownloading ? (
+                      <span className={styles.btnSpinner} />
+                    ) : (
+                      <Download size={15} strokeWidth={1.75} />
+                    )}
+                    <span>{isDownloading ? "Downloading…" : "Download PDF"}</span>
+                  </button>
+                </>
               )}
-              <button
-                className={styles.downloadBtn}
-                onClick={handleDownloadPdf}
-                disabled={isDownloading}
-              >
-                {isDownloading ? (
-                  <span className={styles.btnSpinner} />
-                ) : (
-                  <Download size={15} strokeWidth={1.75} />
-                )}
-                <span>{isDownloading ? "Downloading…" : "Download PDF"}</span>
-              </button>
             </div>
           )}
         </div>
@@ -272,16 +361,57 @@ export function DocumentGeneratorWorkspace({
             <div className={styles.loadingState}>
               <div className={styles.spinner} />
               <p className={styles.loadingTitle}>
-                {isCoverLetterMode
-                  ? "Drafting a concise, tailored cover letter…"
-                  : "Matching your profile against job requirements…"}
+                {isColdEmailMode
+                  ? "Crafting a concise, hook-driven cold email…"
+                  : isCoverLetterMode
+                    ? "Drafting a concise, tailored cover letter…"
+                    : "Matching your profile against job requirements…"}
               </p>
               <p className={styles.loadingHint}>
-                {isCoverLetterMode
-                  ? "Aligning relevant achievements from your profile and formatting your one-page letter PDF."
-                  : "Extracting target keywords, rewriting experience bullets, and formatting your single-column PDF."}
+                {isColdEmailMode
+                  ? "Connecting your strongest relevant win to the role requirements for a high-reply recruiter hook."
+                  : isCoverLetterMode
+                    ? "Aligning relevant achievements from your profile and formatting your one-page letter PDF."
+                    : "Extracting target keywords, rewriting experience bullets, and formatting your single-column PDF."}
               </p>
             </div>
+          ) : isColdEmailMode ? (
+            generatedColdEmail && coldEmailParagraphs.length > 0 ? (
+              <div className={styles.documentPreview}>
+                <div className={styles.paperSheet}>
+                  <div className={styles.coverLetterMeta}>
+                    <span className={styles.coverLetterSubject}>
+                      Subject: {generatedColdEmail.subject}
+                    </span>
+                    {generatedColdEmail.recruiter_name && (
+                      <span className={styles.docItemDate}>
+                        To: {generatedColdEmail.recruiter_name}
+                        {generatedColdEmail.company_name
+                          ? ` (${generatedColdEmail.company_name})`
+                          : ""}
+                      </span>
+                    )}
+                  </div>
+                  <div className={styles.coverLetterBody}>
+                    {coldEmailParagraphs.map((paragraph, idx) => (
+                      <p key={idx} className={styles.coverLetterParagraph}>
+                        {paragraph}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className={styles.emptyPreview}>
+                <div className={styles.emptyIconBox}>
+                  <Send size={22} strokeWidth={1.75} />
+                </div>
+                <h3 className={styles.emptyPreviewTitle}>Live Cold Email Preview</h3>
+                <p className={styles.emptyPreviewDesc}>
+                  Enter the job posting and optional recruiter name on the left to generate a concise outreach email with a strong opening hook.
+                </p>
+              </div>
+            )
           ) : isCoverLetterMode ? (
             generatedCoverLetter && coverLetterParagraphs.length > 0 ? (
               <div className={styles.documentPreview}>

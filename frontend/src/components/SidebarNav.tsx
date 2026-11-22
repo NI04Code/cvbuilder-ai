@@ -2,14 +2,16 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, UserCircle, FileSignature, Mail, Target } from "lucide-react";
+import { LayoutDashboard, Briefcase, UserCircle, FileSignature, Mail, Send, Target } from "lucide-react";
 import styles from "@/app/(dashboard)/layout.module.css";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Document History", icon: LayoutDashboard },
+  { href: "/tracker", label: "Job Tracker", icon: Briefcase },
   { href: "/profile", label: "Base Profile", icon: UserCircle },
   { href: "/generate", label: "Tailor CV", icon: FileSignature },
   { href: "/cover-letter", label: "Cover Letter", icon: Mail },
+  { href: "/cold-email", label: "Cold Email", icon: Send },
   { href: "/ats-checker", label: "ATS Checker", icon: Target },
 ];
 

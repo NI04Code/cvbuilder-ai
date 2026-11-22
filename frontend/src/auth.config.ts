@@ -9,6 +9,7 @@ export const authConfig = {
     authorized({ auth, request: { nextUrl } }) {
       const isLoggedIn = !!auth?.user;
       const isProtectedRoute = nextUrl.pathname.startsWith("/dashboard") || 
+                               nextUrl.pathname.startsWith("/tracker") ||
                                nextUrl.pathname.startsWith("/profile") ||
                                nextUrl.pathname.startsWith("/generate");
       

@@ -14,11 +14,11 @@ export default async function DashboardLayout({
   children: React.ReactNode;
 }) {
   const session = await auth();
-  const isLoggedIn = !!session?.user && !(session as any)?.error;
+  const user = session?.user;
 
-  if (!isLoggedIn) {
+  if (!user || (session as any)?.error) {
     return (
-      <DocumentGenerationProvider>
+      <DocumentGenerationProvider hasSidebar={false}>
         <SessionWatcher sessionError={(session as any)?.error} />
         {children}
       </DocumentGenerationProvider>
@@ -42,15 +42,15 @@ export default async function DashboardLayout({
 
         <div className={styles.userProfile}>
           <div className={styles.avatar}>
-            {session.user.image ? (
-              <img src={session.user.image} alt={session.user.name || "User"} />
+            {user.image ? (
+              <img src={user.image} alt={user.name || "User"} />
             ) : (
-              <span>{session.user.name?.charAt(0) || "U"}</span>
+              <span>{user.name?.charAt(0) || "U"}</span>
             )}
           </div>
           <div className={styles.userInfo}>
-            <span className={styles.userName}>{session.user.name}</span>
-            <span className={styles.userEmail}>{session.user.email}</span>
+            <span className={styles.userName}>{user.name}</span>
+            <span className={styles.userEmail}>{user.email}</span>
           </div>
           <form
             action={async () => {
@@ -71,7 +71,7 @@ export default async function DashboardLayout({
       </aside>
 
       <main className={styles.main}>
-        <DocumentGenerationProvider>{children}</DocumentGenerationProvider>
+        <DocumentGenerationProvider hasSidebar={true}>{children}</DocumentGenerationProvider>
       </main>
     </div>
   );

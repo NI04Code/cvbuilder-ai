@@ -1,4 +1,5 @@
 import NextAuth from "next-auth";
+import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
 import GitHub from "next-auth/providers/github";
 import { authConfig } from "./auth.config";
@@ -27,7 +28,44 @@ async function refreshAccessToken(token: any) {
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
-  providers: [Google, GitHub],
+  providers: [
+    Google,
+    GitHub,
+    Credentials({
+      credentials: {
+        email: { label: "Email", type: "email" },
+        password: { label: "Password", type: "password" },
+      },
+      async authorize(credentials) {
+        if (
+          typeof credentials?.email !== "string" ||
+          typeof credentials?.password !== "string"
+        ) {
+          return null;
+        }
+
+        try {
+          const response = await apiClient.post("/auth/login", {
+            email: credentials.email,
+            password: credentials.password,
+          });
+          const { user, tokens } = response.data;
+          return {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            image: user.avatar_url ?? null,
+            backendAccessToken: tokens.access_token,
+            backendRefreshToken: tokens.refresh_token,
+            accessTokenExpires: Date.now() + tokens.expires_in * 1000,
+            hasProfile: user.has_profile,
+          } as any;
+        } catch {
+          return null;
+        }
+      },
+    }),
+  ],
   callbacks: {
     ...authConfig.callbacks,
     async jwt({ token, user, account, trigger, session }) {
@@ -36,6 +74,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       }
       // Initial sign in
       if (account && user) {
+        if (account.provider === "credentials") {
+          const manualUser = user as any;
+          token.backendAccessToken = manualUser.backendAccessToken;
+          token.backendRefreshToken = manualUser.backendRefreshToken;
+          token.accessTokenExpires = manualUser.accessTokenExpires;
+          token.userId = manualUser.id;
+          token.hasProfile = manualUser.hasProfile;
+          return token;
+        }
+
         try {
           // Sync with backend API
           const internalSecret = process.env.INTERNAL_AUTH_SECRET;
@@ -70,12 +118,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
       }
       
-      // Return previous token if the access token has not expired yet
-      if (!token.accessTokenExpires || !token.backendRefreshToken || Date.now() < (token.accessTokenExpires as number)) {
+      // Refresh proactively when within 5 minutes of expiry (or on explicit forceRefresh)
+      const REFRESH_BUFFER_MS = 5 * 60 * 1000;
+      if (
+        !(trigger === "update" && (session as any)?.forceRefresh) &&
+        (!token.accessTokenExpires ||
+          !token.backendRefreshToken ||
+          Date.now() < (token.accessTokenExpires as number) - REFRESH_BUFFER_MS)
+      ) {
         return token;
       }
 
-      // Access token has expired, try to update it
+      // Access token is expired or nearing expiry, refresh via backend
       return await refreshAccessToken(token);
     },
     async session({ session, token }) {

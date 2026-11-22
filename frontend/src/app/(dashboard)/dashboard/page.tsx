@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
-import { FileSignature, Mail, Download, Plus, Target, Trash2, AlertCircle } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { FileSignature, Mail, Send, Copy, Check, Download, Plus, Target, Trash2, AlertCircle, UserCircle, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import {
   apiClient,
@@ -11,6 +12,7 @@ import {
   getDocumentEndpointConfig,
 } from "@/lib/api";
 import { useDocumentGeneration } from "@/context/DocumentGenerationContext";
+import { isProfileOnboardingSkipped } from "@/lib/onboarding";
 import styles from "./page.module.css";
 
 type DocumentFilter = "all" | DocumentType;
@@ -19,6 +21,7 @@ const PAGE_SIZE = 20;
 
 export default function DashboardPage() {
   const { data: session, status } = useSession();
+  const router = useRouter();
   const { clearGeneratedDocIfMatches } = useDocumentGeneration();
   const [history, setHistory] = useState<any[]>([]);
   const [activeFilter, setActiveFilter] = useState<DocumentFilter>("all");
@@ -26,11 +29,26 @@ export default function DashboardPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [copyingId, setCopyingId] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
+  const userId = session?.user?.id;
+  const hasProfile = (session as any)?.hasProfile;
+  const shouldRedirectToProfile =
+    status === "authenticated" &&
+    hasProfile === false &&
+    Boolean(userId) &&
+    !isProfileOnboardingSkipped(userId);
+
   useEffect(() => {
+    if (shouldRedirectToProfile) {
+      router.replace("/profile?onboarding=1");
+      return;
+    }
+
     async function fetchHistory() {
       if (status !== "authenticated") return;
       try {
@@ -48,7 +66,7 @@ export default function DashboardPage() {
       }
     }
     fetchHistory();
-  }, [session, status]);
+  }, [session, status, shouldRedirectToProfile, router]);
 
   const handleLoadMore = async () => {
     if (loadingMore || !hasMore) return;
@@ -118,13 +136,57 @@ export default function DashboardPage() {
     }
   };
 
+  const handleCopyColdEmail = async (docId: string) => {
+    if (copyingId) return;
+    setCopyingId(docId);
+    setActionError(null);
+    try {
+      const token = (session as any)?.backendAccessToken;
+      const res = await apiClient.get(`/cold-emails/${docId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const text = `Subject: ${res.data.subject}\n\n${res.data.email_body}`;
+      await navigator.clipboard.writeText(text);
+      setCopiedId(docId);
+      setTimeout(() => setCopiedId((prev) => (prev === docId ? null : prev)), 2000);
+    } catch (err: any) {
+      console.error("Copy failed", err);
+      setActionError(err.response?.data?.detail || "Failed to copy cold email.");
+    } finally {
+      setCopyingId(null);
+    }
+  };
+
   const cvCount = history.filter((item) => (item.document_type || "cv") === "cv").length;
   const coverLetterCount = history.filter((item) => item.document_type === "cover_letter").length;
+  const coldEmailCount = history.filter((item) => item.document_type === "cold_email").length;
   const filteredHistory = history.filter((item) => {
     if (activeFilter === "all") return true;
-    const itemType: DocumentType = item.document_type === "cover_letter" ? "cover_letter" : "cv";
+    const itemType: DocumentType =
+      item.document_type === "cold_email"
+        ? "cold_email"
+        : item.document_type === "cover_letter"
+          ? "cover_letter"
+          : "cv";
     return itemType === activeFilter;
   });
+
+  if (shouldRedirectToProfile) {
+    return (
+      <div className={styles.container}>
+        <div className={styles.skeletonList} aria-label="Redirecting to profile setup">
+          {[0, 1].map((i) => (
+            <div key={i} className={styles.skeletonRow}>
+              <div className={styles.skeletonLeft}>
+                <div className={styles.skeletonTitle} />
+                <div className={styles.skeletonSub} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={styles.container}>
@@ -133,16 +195,20 @@ export default function DashboardPage() {
           <h1 className={styles.title}>Generated Documents</h1>
           <p className={styles.subtitle}>
             {loading
-              ? "Loading your generated CVs and cover letters…"
+              ? "Loading your generated CVs, cover letters, and cold emails…"
               : history.length > 0
-                ? `${cvCount} tailored CV${cvCount === 1 ? "" : "s"} · ${coverLetterCount} cover letter${coverLetterCount === 1 ? "" : "s"} ready for download.`
-                : "Paste a job description to generate your first tailored CV or cover letter."}
+                ? `${cvCount} tailored CV${cvCount === 1 ? "" : "s"} · ${coverLetterCount} cover letter${coverLetterCount === 1 ? "" : "s"} · ${coldEmailCount} cold email${coldEmailCount === 1 ? "" : "s"}.`
+                : "Paste a job description to generate your first tailored CV, cover letter, or cold email."}
           </p>
         </div>
         <div className={styles.headerActions}>
           <Link href="/ats-checker" className={styles.secondaryBtn}>
             <Target size={16} strokeWidth={1.75} />
             <span>Check ATS Score</span>
+          </Link>
+          <Link href="/cold-email" className={styles.secondaryBtn}>
+            <Send size={16} strokeWidth={1.75} />
+            <span>New Cold Email</span>
           </Link>
           <Link href="/cover-letter" className={styles.secondaryBtn}>
             <Mail size={16} strokeWidth={1.75} />
@@ -154,6 +220,26 @@ export default function DashboardPage() {
           </Link>
         </div>
       </header>
+
+      {hasProfile === false && (
+        <div className={styles.profilePromptBanner}>
+          <div className={styles.profilePromptTextWrap}>
+            <div className={styles.profilePromptIcon}>
+              <UserCircle size={18} strokeWidth={1.75} />
+            </div>
+            <div>
+              <p className={styles.profilePromptTitle}>Complete your base profile to generate documents</p>
+              <p className={styles.profilePromptDesc}>
+                Upload an existing resume PDF or enter your experience manually whenever you&apos;re ready.
+              </p>
+            </div>
+          </div>
+          <Link href="/profile?onboarding=1" className={styles.secondaryBtn}>
+            <span>Create Profile</span>
+            <ArrowRight size={15} strokeWidth={2} />
+          </Link>
+        </div>
+      )}
 
       {!loading && history.length > 0 && (
         <div className={styles.filterBar}>
@@ -188,6 +274,16 @@ export default function DashboardPage() {
               <span>Cover Letters</span>
               <span className={styles.filterCount}>{coverLetterCount}</span>
             </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeFilter === "cold_email"}
+              onClick={() => setActiveFilter("cold_email")}
+              className={`${styles.filterTab} ${activeFilter === "cold_email" ? styles.filterTabActive : ""}`}
+            >
+              <span>Cold Emails</span>
+              <span className={styles.filterCount}>{coldEmailCount}</span>
+            </button>
           </div>
         </div>
       )}
@@ -219,10 +315,17 @@ export default function DashboardPage() {
           <div className={styles.cvList}>
             {filteredHistory.map((cv: any) => {
               const docType: DocumentType =
-                cv.document_type === "cover_letter" ? "cover_letter" : "cv";
+                cv.document_type === "cold_email"
+                  ? "cold_email"
+                  : cv.document_type === "cover_letter"
+                    ? "cover_letter"
+                    : "cv";
               const isCoverLetter = docType === "cover_letter";
+              const isColdEmail = docType === "cold_email";
               const score =
-                !isCoverLetter && cv.ats_score != null ? Math.round(cv.ats_score) : null;
+                !isCoverLetter && !isColdEmail && cv.ats_score != null
+                  ? Math.round(cv.ats_score)
+                  : null;
               const tier =
                 score != null
                   ? score >= 80
@@ -237,7 +340,9 @@ export default function DashboardPage() {
                 <div key={cv.id} className={styles.cvCard}>
                   <div className={styles.cvPrimary}>
                     <div className={styles.cvIconBox} data-type={docType}>
-                      {isCoverLetter ? (
+                      {isColdEmail ? (
+                        <Send size={18} strokeWidth={1.75} />
+                      ) : isCoverLetter ? (
                         <Mail size={18} strokeWidth={1.75} />
                       ) : (
                         <FileSignature size={18} strokeWidth={1.75} />
@@ -245,10 +350,16 @@ export default function DashboardPage() {
                     </div>
                     <div className={styles.cvText}>
                       <span className={styles.cvRole}>
-                        {cv.job_title || (isCoverLetter ? "Cover Letter" : "Tailored Resume")}
+                        {cv.job_title ||
+                          (isColdEmail
+                            ? "Cold Email"
+                            : isCoverLetter
+                              ? "Cover Letter"
+                              : "Tailored Resume")}
                       </span>
                       <span className={styles.cvMeta}>
                         {cv.company_name ? `${cv.company_name} · ` : ""}
+                        {isColdEmail && cv.recruiter_name ? `To ${cv.recruiter_name} · ` : ""}
                         <time className={styles.cvDate}>
                           {new Date(cv.created_at).toLocaleDateString("en-US", {
                             month: "short",
@@ -262,26 +373,42 @@ export default function DashboardPage() {
 
                   <div className={styles.cvRight}>
                     <span className={styles.typeBadge} data-type={docType}>
-                      {isCoverLetter ? "Cover Letter" : "CV"}
+                      {isColdEmail ? "Cold Email" : isCoverLetter ? "Cover Letter" : "CV"}
                     </span>
                     {score != null && (
                       <span className={styles.atsBadge} data-score={tier}>
                         {score}% ATS
                       </span>
                     )}
-                    <button
-                      onClick={() => handleDownload(cv.id, cv.company_name, docType)}
-                      className={styles.downloadBtn}
-                      disabled={isDownloading || deletingId === cv.id}
-                      title="Download PDF"
-                    >
-                      {isDownloading ? (
-                        <span className={styles.btnSpinner} />
-                      ) : (
-                        <Download size={15} strokeWidth={1.75} />
-                      )}
-                      <span>{isDownloading ? "Downloading…" : "PDF"}</span>
-                    </button>
+                    {isColdEmail ? (
+                      <button
+                        onClick={() => handleCopyColdEmail(cv.id)}
+                        className={styles.downloadBtn}
+                        disabled={copyingId === cv.id || deletingId === cv.id}
+                        title="Copy cold email"
+                      >
+                        {copiedId === cv.id ? (
+                          <Check size={15} strokeWidth={2} />
+                        ) : (
+                          <Copy size={15} strokeWidth={1.75} />
+                        )}
+                        <span>{copiedId === cv.id ? "Copied" : "Copy"}</span>
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleDownload(cv.id, cv.company_name, docType)}
+                        className={styles.downloadBtn}
+                        disabled={isDownloading || deletingId === cv.id}
+                        title="Download PDF"
+                      >
+                        {isDownloading ? (
+                          <span className={styles.btnSpinner} />
+                        ) : (
+                          <Download size={15} strokeWidth={1.75} />
+                        )}
+                        <span>{isDownloading ? "Downloading…" : "PDF"}</span>
+                      </button>
+                    )}
 
                     {confirmDeleteId === cv.id ? (
                       <div className={styles.confirmGroup}>
@@ -338,27 +465,45 @@ export default function DashboardPage() {
         ) : history.length > 0 ? (
           <div className={styles.emptyState}>
             <div className={styles.emptyIconBox}>
-              {activeFilter === "cover_letter" ? (
+              {activeFilter === "cold_email" ? (
+                <Send size={24} strokeWidth={1.75} />
+              ) : activeFilter === "cover_letter" ? (
                 <Mail size={24} strokeWidth={1.75} />
               ) : (
                 <FileSignature size={24} strokeWidth={1.75} />
               )}
             </div>
             <h2 className={styles.emptyTitle}>
-              {activeFilter === "cover_letter" ? "No cover letters yet" : "No tailored CVs yet"}
+              {activeFilter === "cold_email"
+                ? "No cold emails yet"
+                : activeFilter === "cover_letter"
+                  ? "No cover letters yet"
+                  : "No tailored CVs yet"}
             </h2>
             <p className={styles.emptyDesc}>
-              {activeFilter === "cover_letter"
-                ? "Generate a concise, one-page cover letter tailored to your target role."
-                : "Paste a target job posting and align your resume bullets and skills into a clean PDF."}
+              {activeFilter === "cold_email"
+                ? "Generate a concise, hook-driven cold email tailored to the recruiter and target role."
+                : activeFilter === "cover_letter"
+                  ? "Generate a concise, one-page cover letter tailored to your target role."
+                  : "Paste a target job posting and align your resume bullets and skills into a clean PDF."}
             </p>
             <Link
-              href={activeFilter === "cover_letter" ? "/cover-letter" : "/generate"}
+              href={
+                activeFilter === "cold_email"
+                  ? "/cold-email"
+                  : activeFilter === "cover_letter"
+                    ? "/cover-letter"
+                    : "/generate"
+              }
               className={styles.generateBtn}
             >
               <Plus size={16} strokeWidth={2} />
               <span>
-                {activeFilter === "cover_letter" ? "Write a Cover Letter" : "Tailor a CV"}
+                {activeFilter === "cold_email"
+                  ? "Write a Cold Email"
+                  : activeFilter === "cover_letter"
+                    ? "Write a Cover Letter"
+                    : "Tailor a CV"}
               </span>
             </Link>
           </div>

@@ -76,6 +76,17 @@
   opacity: 0.85;
 }
 
+@media (prefers-reduced-motion: no-preference) {
+  .navIcon {
+    transition: transform 0.16s var(--ease-out), opacity 0.15s ease;
+  }
+
+  .navLink:hover .navIcon {
+    transform: translateX(2px);
+    opacity: 1;
+  }
+}
+
 .navLink:hover {
   background: var(--bg-surface-raised);
   color: var(--text-primary);

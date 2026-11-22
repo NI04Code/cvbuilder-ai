@@ -168,7 +168,8 @@
   flex-shrink: 0;
 }
 
-.cvIconBox[data-type="cover_letter"] {
+.cvIconBox[data-type="cover_letter"],
+.cvIconBox[data-type="cold_email"] {
   background: var(--accent-soft);
   color: var(--accent-text);
 }
@@ -183,7 +184,8 @@
   border: 1px solid var(--border-subtle);
 }
 
-.typeBadge[data-type="cover_letter"] {
+.typeBadge[data-type="cover_letter"],
+.typeBadge[data-type="cold_email"] {
   background: var(--accent-soft);
   color: var(--accent-text);
   border-color: transparent;
@@ -509,4 +511,125 @@
 .loadMoreBtn:disabled {
   opacity: 0.65;
   cursor: not-allowed;
+}
+
+.profilePromptBanner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 1rem 1.25rem;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.profilePromptTextWrap {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  min-width: 0;
+}
+
+.profilePromptIcon {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  background: var(--primary-soft);
+  color: var(--primary-text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.profilePromptTitle {
+  font-size: 0.925rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.profilePromptDesc {
+  font-size: 0.825rem;
+  color: var(--text-secondary);
+  margin-top: 0.15rem;
+}
+
+@keyframes fadeSlideUp {
+  from {
+    opacity: 0;
+    translate: 0 8px;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .profilePromptBanner {
+    animation: fadeSlideUp 260ms var(--ease-out) both;
+  }
+
+  .profilePromptBanner a svg {
+    transition: transform 0.16s var(--ease-out);
+  }
+
+  .profilePromptBanner a:hover svg {
+    transform: translateX(2px);
+  }
+
+  .cvList > .cvCard {
+    --stagger-step: 35ms;
+    animation: fadeSlideUp 240ms var(--ease-out) both;
+    transition:
+      border-color 0.15s ease,
+      background-color 0.15s ease,
+      box-shadow 0.18s ease,
+      translate 0.18s var(--ease-out);
+  }
+
+  @supports (animation-delay: calc(sibling-index() * 0.1s)) {
+    .cvList > .cvCard {
+      animation-delay: calc(min(sibling-index(), 8) * var(--stagger-step));
+    }
+  }
+
+  @supports not (animation-delay: calc(sibling-index() * 0.1s)) {
+    .cvList > .cvCard:nth-child(1) { animation-delay: 25ms; }
+    .cvList > .cvCard:nth-child(2) { animation-delay: 60ms; }
+    .cvList > .cvCard:nth-child(3) { animation-delay: 95ms; }
+    .cvList > .cvCard:nth-child(4) { animation-delay: 130ms; }
+    .cvList > .cvCard:nth-child(5) { animation-delay: 165ms; }
+    .cvList > .cvCard:nth-child(6) { animation-delay: 200ms; }
+    .cvList > .cvCard:nth-child(7) { animation-delay: 235ms; }
+    .cvList > .cvCard:nth-child(8) { animation-delay: 270ms; }
+  }
+
+  .cvCard:hover {
+    translate: 0 -1px;
+    box-shadow: var(--shadow-md);
+  }
+
+  .emptyState,
+  .errorBanner {
+    animation: fadeSlideUp 240ms var(--ease-out) both;
+  }
+
+  .generateBtn,
+  .secondaryBtn,
+  .downloadBtn {
+    transition:
+      background-color 0.15s ease,
+      border-color 0.15s ease,
+      transform 0.12s ease;
+  }
+
+  .generateBtn:active,
+  .secondaryBtn:active,
+  .downloadBtn:active:not(:disabled) {
+    transform: scale(0.985);
+  }
 }

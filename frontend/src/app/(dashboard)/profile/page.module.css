@@ -798,6 +798,9 @@
   border-radius: var(--radius-md);
   font-size: 0.85rem;
   font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
   transition: background-color 0.15s ease, color 0.15s ease;
 }
 
@@ -808,6 +811,159 @@
 
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+@keyframes fadeSlideUp {
+  from {
+    opacity: 0;
+    translate: 0 8px;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
+@keyframes softPulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.85);
+  }
+}
+
+.onboardingBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  background: var(--primary-soft);
+  color: var(--primary-text);
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-bottom: 0.625rem;
+}
+
+.onboardingDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--primary);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .onboardingDot {
+    animation: softPulse 2.4s ease-in-out infinite;
+  }
+
+  .container > .header {
+    animation: fadeSlideUp 260ms var(--ease-out) both;
+  }
+
+  .emptyState {
+    animation: fadeSlideUp 280ms var(--ease-out) 40ms both;
+  }
+
+  .emptyCards > .emptyCard {
+    --stagger-step: 55ms;
+    animation: fadeSlideUp 280ms var(--ease-out) both;
+    transition:
+      border-color 0.16s ease,
+      background-color 0.16s ease,
+      box-shadow 0.18s ease,
+      translate 0.18s var(--ease-out),
+      transform 0.12s ease;
+  }
+
+  @supports (animation-delay: calc(sibling-index() * 0.1s)) {
+    .emptyCards > .emptyCard {
+      animation-delay: calc(sibling-index() * var(--stagger-step));
+    }
+  }
+
+  @supports not (animation-delay: calc(sibling-index() * 0.1s)) {
+    .emptyCards > .emptyCard:nth-child(1) { animation-delay: 40ms; }
+    .emptyCards > .emptyCard:nth-child(2) { animation-delay: 95ms; }
+  }
+
+  .emptyCard:hover {
+    translate: 0 -2px;
+    box-shadow: var(--shadow-md);
+  }
+
+  .emptyCard:active {
+    transform: scale(0.99);
+  }
+
+  .emptyCardIcon {
+    transition: transform 0.18s var(--ease-out);
+  }
+
+  .emptyCard:hover .emptyCardIcon {
+    transform: scale(1.06);
+  }
+
+  .dropzone {
+    animation: fadeSlideUp 260ms var(--ease-out) both;
+  }
+
+  .uploadIconBox {
+    transition: transform 0.18s var(--ease-out);
+  }
+
+  .dropzone:hover .uploadIconBox,
+  .dropzoneActive .uploadIconBox {
+    transform: translateY(-2px);
+  }
+
+  .loadingOverlay {
+    animation: fadeSlideUp 180ms var(--ease-out) both;
+  }
+
+  .sectionsStack > .section {
+    --stagger-step: 40ms;
+    animation: fadeSlideUp 260ms var(--ease-out) both;
+  }
+
+  @supports (animation-delay: calc(sibling-index() * 0.1s)) {
+    .sectionsStack > .section {
+      animation-delay: calc(min(sibling-index(), 6) * var(--stagger-step));
+    }
+  }
+
+  @supports not (animation-delay: calc(sibling-index() * 0.1s)) {
+    .sectionsStack > .section:nth-child(1) { animation-delay: 30ms; }
+    .sectionsStack > .section:nth-child(2) { animation-delay: 70ms; }
+    .sectionsStack > .section:nth-child(3) { animation-delay: 110ms; }
+    .sectionsStack > .section:nth-child(4) { animation-delay: 150ms; }
+    .sectionsStack > .section:nth-child(5) { animation-delay: 190ms; }
+    .sectionsStack > .section:nth-child(6) { animation-delay: 230ms; }
+  }
+
+  .errorMsg,
+  .successMsg {
+    animation: fadeSlideUp 200ms var(--ease-out) both;
+  }
+
+  .saveBtn,
+  .editBtn,
+  .cancelBtn {
+    transition:
+      background-color 0.15s ease,
+      border-color 0.15s ease,
+      color 0.15s ease,
+      transform 0.12s ease;
+  }
+
+  .saveBtn:active:not(:disabled),
+  .editBtn:active,
+  .cancelBtn:active {
+    transform: scale(0.985);
+  }
 }
 
 @media (max-width: 640px) {

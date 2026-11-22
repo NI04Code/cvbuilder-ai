@@ -1,4 +1,4 @@
-import axios from "axios";
+import axios, { AxiosError, InternalAxiosRequestConfig } from "axios";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
 
@@ -9,11 +9,66 @@ export const apiClient = axios.create({
   },
 });
 
-export type DocumentType = "cv" | "cover_letter";
+let inFlightRefresh: Promise<string | null> | null = null;
+
+/**
+ * Triggers a NextAuth session check on the client so expired or near-expiry
+ * backendAccessTokens are refreshed via /api/auth/session without stamping concurrent requests.
+ */
+async function getRefreshedAccessToken(): Promise<string | null> {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  if (!inFlightRefresh) {
+    inFlightRefresh = (async () => {
+      try {
+        const { getSession } = await import("next-auth/react");
+        const session = await getSession();
+        return ((session as any)?.backendAccessToken as string | undefined) ?? null;
+      } catch {
+        return null;
+      } finally {
+        inFlightRefresh = null;
+      }
+    })();
+  }
+  return inFlightRefresh;
+}
+
+apiClient.interceptors.response.use(
+  (response) => response,
+  async (error: AxiosError) => {
+    const originalRequest = error.config as
+      | (InternalAxiosRequestConfig & { _retry?: boolean })
+      | undefined;
+
+    if (
+      typeof window === "undefined" ||
+      error.response?.status !== 401 ||
+      !originalRequest ||
+      originalRequest._retry ||
+      originalRequest.url?.includes("/auth/")
+    ) {
+      return Promise.reject(error);
+    }
+
+    originalRequest._retry = true;
+    const freshToken = await getRefreshedAccessToken();
+    if (!freshToken) {
+      return Promise.reject(error);
+    }
+
+    originalRequest.headers.set("Authorization", `Bearer ${freshToken}`);
+    return apiClient(originalRequest);
+  }
+);
+
+export type DocumentType = "cv" | "cover_letter" | "cold_email";
 
 const DOCUMENT_ENDPOINT_MAP: Record<DocumentType, { apiBase: string; filenamePrefix: string }> = {
   cv: { apiBase: "/cv", filenamePrefix: "cv" },
   cover_letter: { apiBase: "/cover-letters", filenamePrefix: "cover-letter" },
+  cold_email: { apiBase: "/cold-emails", filenamePrefix: "cold-email" },
 };
 
 export function getDocumentEndpointConfig(documentType: DocumentType = "cv") {
@@ -64,9 +119,19 @@ export async function downloadDocumentPdf(options: {
 }): Promise<boolean> {
   const { docId, documentType, token, fallbackCompany, fallbackUserName } = options;
   const { apiBase } = getDocumentEndpointConfig(documentType);
-  const res = await fetch(`${API_URL}${apiBase}/${docId}/download`, {
+  const downloadUrl = `${API_URL}${apiBase}/${docId}/download`;
+
+  let res = await fetch(downloadUrl, {
     headers: { Authorization: `Bearer ${token}` },
   });
+  if (res.status === 401) {
+    const freshToken = await getRefreshedAccessToken();
+    if (freshToken) {
+      res = await fetch(downloadUrl, {
+        headers: { Authorization: `Bearer ${freshToken}` },
+      });
+    }
+  }
   if (!res.ok) {
     return false;
   }

@@ -44,6 +44,7 @@ interface ATSCheckResult {
   overall_score: number;
   candidate_level: string;
   target_role?: string | null;
+  company_name?: string | null;
   sections: ATSSectionScore[];
   keyword_analysis: ATSKeywordAnalysis;
   formatting_issues: ATSFormattingIssue[];
@@ -106,6 +107,8 @@ export default function ATSCheckerPage() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [targetRole, setTargetRole] = useState("");
+  const [companyName, setCompanyName] = useState("");
+  const [jobDescription, setJobDescription] = useState("");
   const [result, setResult] = useState<ATSCheckResult | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -142,6 +145,12 @@ export default function ATSCheckerPage() {
     formData.append("file", file);
     if (targetRole.trim()) {
       formData.append("target_role", targetRole.trim());
+    }
+    if (companyName.trim()) {
+      formData.append("company_name", companyName.trim());
+    }
+    if (jobDescription.trim()) {
+      formData.append("job_description", jobDescription.trim());
     }
 
     try {
@@ -216,22 +225,63 @@ export default function ATSCheckerPage() {
         {!result && !isAnalyzing && (
           <div className={styles.uploadWrapper}>
             <div className={styles.targetRoleBox}>
-              <label htmlFor="ats-target-role" className={styles.targetRoleLabel}>
-                <Briefcase size={15} strokeWidth={1.75} className={styles.targetRoleIcon} />
-                <span>Target Job Role</span>
-                <span className={styles.targetRoleOptional}>(Optional)</span>
-              </label>
-              <input
-                id="ats-target-role"
-                type="text"
-                maxLength={120}
-                value={targetRole}
-                onChange={(e) => setTargetRole(e.target.value)}
-                placeholder="e.g., Senior Backend Engineer, CPA Accountant, Registered Nurse"
-                className={styles.targetRoleInput}
-              />
+              <div className={styles.targetFieldsRow}>
+                <div className={styles.targetFieldGroup}>
+                  <label htmlFor="ats-target-role" className={styles.targetRoleLabel}>
+                    <Briefcase size={15} strokeWidth={1.75} className={styles.targetRoleIcon} />
+                    <span>Target Job Role</span>
+                    <span className={styles.targetRoleOptional}>(Optional)</span>
+                  </label>
+                  <input
+                    id="ats-target-role"
+                    type="text"
+                    maxLength={120}
+                    value={targetRole}
+                    onChange={(e) => setTargetRole(e.target.value)}
+                    placeholder="e.g., Senior Backend Engineer"
+                    className={styles.targetRoleInput}
+                  />
+                </div>
+                <div className={styles.targetFieldGroup}>
+                  <label htmlFor="ats-company-name" className={styles.targetRoleLabel}>
+                    <span>Target Company</span>
+                    <span className={styles.targetRoleOptional}>(Optional)</span>
+                  </label>
+                  <input
+                    id="ats-company-name"
+                    type="text"
+                    maxLength={120}
+                    value={companyName}
+                    onChange={(e) => setCompanyName(e.target.value)}
+                    placeholder="e.g., Stripe"
+                    className={styles.targetRoleInput}
+                  />
+                </div>
+              </div>
+
+              <div className={styles.targetFieldGroup}>
+                <div className={styles.targetLabelRow}>
+                  <label htmlFor="ats-job-description" className={styles.targetRoleLabel}>
+                    <span>Job Description</span>
+                    <span className={styles.targetRoleOptional}>(Optional)</span>
+                  </label>
+                  <span className={styles.targetRoleOptional}>
+                    {jobDescription.trim().length} / 2,500 chars
+                  </span>
+                </div>
+                <textarea
+                  id="ats-job-description"
+                  maxLength={2500}
+                  value={jobDescription}
+                  onChange={(e) => setJobDescription(e.target.value)}
+                  placeholder="Paste the job description to grade your resume's keyword coverage and requirement alignment against it…"
+                  className={styles.targetTextarea}
+                  rows={4}
+                />
+              </div>
+
               <p className={styles.targetRoleHint}>
-                Grades credential strength, experience fit, and missing keywords against this role. Leave blank to auto-detect from your CV.
+                Grades credential strength, experience fit, and missing keywords against this role, company, and job description. Leave blank to auto-detect from your CV.
               </p>
             </div>
             <div
@@ -285,6 +335,11 @@ export default function ATSCheckerPage() {
                   {result.target_role && (
                     <span className={styles.targetRoleBadge}>
                       Target: {result.target_role}
+                    </span>
+                  )}
+                  {result.company_name && (
+                    <span className={styles.targetRoleBadge}>
+                      Company: {result.company_name}
                     </span>
                   )}
                   <span

@@ -560,3 +560,63 @@
     min-height: 460px;
   }
 }
+
+@keyframes fadeSlideUp {
+  from {
+    opacity: 0;
+    translate: 0 8px;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .leftPanel {
+    animation: fadeSlideUp 260ms var(--ease-out) both;
+  }
+
+  .rightPanel {
+    animation: fadeSlideUp 280ms var(--ease-out) 40ms both;
+  }
+
+  .documentPreview,
+  .profileRequiredCard,
+  .emptyPreview,
+  .errorMsg {
+    animation: fadeSlideUp 260ms var(--ease-out) both;
+  }
+
+  .keywordChips > .keywordChip {
+    --stagger-step: 20ms;
+    animation: fadeSlideUp 200ms var(--ease-out) both;
+  }
+
+  @supports (animation-delay: calc(sibling-index() * 0.1s)) {
+    .keywordChips > .keywordChip {
+      animation-delay: calc(min(sibling-index(), 12) * var(--stagger-step));
+    }
+  }
+
+  @supports not (animation-delay: calc(sibling-index() * 0.1s)) {
+    .keywordChips > .keywordChip:nth-child(1) { animation-delay: 20ms; }
+    .keywordChips > .keywordChip:nth-child(2) { animation-delay: 40ms; }
+    .keywordChips > .keywordChip:nth-child(3) { animation-delay: 60ms; }
+    .keywordChips > .keywordChip:nth-child(4) { animation-delay: 80ms; }
+    .keywordChips > .keywordChip:nth-child(5) { animation-delay: 100ms; }
+    .keywordChips > .keywordChip:nth-child(6) { animation-delay: 120ms; }
+  }
+
+  .generateBtn,
+  .downloadBtn,
+  .primaryLinkBtn {
+    transition: background-color 0.15s ease, transform 0.12s ease;
+  }
+
+  .generateBtn:active:not(:disabled),
+  .downloadBtn:active:not(:disabled),
+  .primaryLinkBtn:active {
+    transform: scale(0.985);
+  }
+}

@@ -1,19 +1,25 @@
 "use client";
 
-import { signIn } from "next-auth/react";
-import { useState, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { getSession, signIn } from "next-auth/react";
+import { useState, Suspense, FormEvent } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { FileText, AlertCircle } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { isProfileOnboardingSkipped } from "@/lib/onboarding";
 import styles from "./page.module.css";
 import Link from "next/link";
 
 function LoginContent() {
   const [isLoading, setIsLoading] = useState<string | null>(null);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [formError, setFormError] = useState<string | null>(null);
   const searchParams = useSearchParams();
+  const router = useRouter();
   const error = searchParams.get("error");
 
-  const handleLogin = async (provider: string) => {
+  const handleOAuthLogin = async (provider: string) => {
+    setFormError(null);
     setIsLoading(provider);
     try {
       await signIn(provider, { callbackUrl: "/dashboard" });
@@ -22,6 +28,43 @@ function LoginContent() {
       setIsLoading(null);
     }
   };
+
+  const handleCredentialsLogin = async (e: FormEvent) => {
+    e.preventDefault();
+    setFormError(null);
+    setIsLoading("credentials");
+    try {
+      const result = await signIn("credentials", {
+        email: email.trim(),
+        password,
+        redirect: false,
+      });
+      if (result?.error) {
+        setFormError("Invalid email or password.");
+        setIsLoading(null);
+        return;
+      }
+      const nextSession = await getSession();
+      const userId = nextSession?.user?.id;
+      const shouldOnboard =
+        (nextSession as any)?.hasProfile === false &&
+        !isProfileOnboardingSkipped(userId);
+      router.push(shouldOnboard ? "/profile?onboarding=1" : "/dashboard");
+      router.refresh();
+    } catch (err) {
+      console.error("Login error:", err);
+      setFormError("Unable to sign in right now. Please try again.");
+      setIsLoading(null);
+    }
+  };
+
+  const bannerMessage =
+    formError ||
+    (error === "SessionExpired"
+      ? "Your session expired. Sign in again to continue."
+      : error === "CredentialsSignin"
+        ? "Invalid email or password."
+        : null);
 
   return (
     <div className={styles.container}>
@@ -40,17 +83,67 @@ function LoginContent() {
           Import your base resume once and generate role-targeted PDFs.
         </p>
 
-        {error === "SessionExpired" && (
+        {bannerMessage && (
           <div className={styles.errorBanner}>
             <AlertCircle size={16} strokeWidth={1.75} />
-            <span>Your session expired. Sign in again to continue.</span>
+            <span>{bannerMessage}</span>
           </div>
         )}
 
+        <form onSubmit={handleCredentialsLogin} className={styles.form}>
+          <div className={styles.formGroup}>
+            <label htmlFor="email" className={styles.label}>
+              Email
+            </label>
+            <input
+              id="email"
+              type="email"
+              required
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              className={styles.input}
+              disabled={!!isLoading}
+            />
+          </div>
+
+          <div className={styles.formGroup}>
+            <label htmlFor="password" className={styles.label}>
+              Password
+            </label>
+            <input
+              id="password"
+              type="password"
+              required
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              className={styles.input}
+              disabled={!!isLoading}
+            />
+          </div>
+
+          <button
+            type="submit"
+            className={styles.submitBtn}
+            disabled={!!isLoading}
+          >
+            {isLoading === "credentials" && <span className={styles.spinner} />}
+            <span>{isLoading === "credentials" ? "Signing in…" : "Sign in"}</span>
+          </button>
+        </form>
+
+        <div className={styles.divider}>
+          <span>or continue with</span>
+        </div>
+
         <div className={styles.providerList}>
           <button
+            type="button"
             className={styles.providerButton}
-            onClick={() => handleLogin("google")}
+            onClick={() => handleOAuthLogin("google")}
             disabled={!!isLoading}
           >
             {isLoading === "google" ? (
@@ -67,8 +160,9 @@ function LoginContent() {
           </button>
 
           <button
+            type="button"
             className={styles.providerButton}
-            onClick={() => handleLogin("github")}
+            onClick={() => handleOAuthLogin("github")}
             disabled={!!isLoading}
           >
             {isLoading === "github" ? (
@@ -82,12 +176,20 @@ function LoginContent() {
           </button>
         </div>
 
-        <p className={styles.footerText}>
-          Just testing a resume?{" "}
-          <Link href="/ats-checker" className={styles.footerLink}>
-            Run a free ATS check without signing in
-          </Link>
-        </p>
+        <div className={styles.footerStack}>
+          <p className={styles.footerTextCompact}>
+            Don&apos;t have an account?{" "}
+            <Link href="/register" className={styles.footerLink}>
+              Create one
+            </Link>
+          </p>
+          <p className={styles.footerTextCompact}>
+            Just testing a resume?{" "}
+            <Link href="/ats-checker" className={styles.footerLink}>
+              Run a free ATS check without signing in
+            </Link>
+          </p>
+        </div>
       </div>
     </div>
   );
