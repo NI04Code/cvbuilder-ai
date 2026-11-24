@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>{{ personal_info.name }} - CV</title>
+    <title>{{ (personal_info.name or '') | upper }} - CV</title>
     <style>
         @page {
             size: A4;
@@ -150,7 +150,7 @@
 <body>
 
     <!-- Header -->
-    <h1>{{ personal_info.name }}</h1>
+    <h1>{{ (personal_info.name or '') | upper }}</h1>
     <div class="contact-info">
         {% for item in header_items %}
             {% if not loop.first %} | {% endif %}

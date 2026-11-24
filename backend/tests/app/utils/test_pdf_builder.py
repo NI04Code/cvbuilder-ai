@@ -37,8 +37,11 @@ def test_generate_cv_and_cover_letter_pdfs(tmp_path: Path):
     fake_doc = MagicMock()
     fake_doc.__len__.return_value = 1
 
-    with patch("app.utils.pdf_builder._render_story_to_pdf_doc", return_value=fake_doc):
+    with patch("app.utils.pdf_builder._render_story_to_pdf_doc", return_value=fake_doc) as mock_render:
         assert pdf_builder.generate_cv_pdf(make_tailored_cv(), pi, str(cv_out)) == str(cv_out)
+        cv_html = mock_render.call_args.args[0]
+        assert f"<h1>{pi.name.upper()}</h1>" in cv_html
+        assert f"<title>{pi.name.upper()} - CV</title>" in cv_html
         assert (
             pdf_builder.generate_cover_letter_pdf(
                 "Dear Team,\n\nParagraph.\n\nSincerely,\nAlex",

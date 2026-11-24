@@ -73,6 +73,10 @@ async def test_generate_tailored_cv_success_and_errors(mock_db, tmp_path: Path):
             "app.services.cv_service.process_cv_generation",
             new=AsyncMock(return_value={"tailored_cv": tailored}),
         ),
+        patch(
+            "app.services.cv_service.get_generated_document_path",
+            return_value=tmp_path / "cv_fail.pdf",
+        ),
         patch("app.services.cv_service.generate_cv_pdf", side_effect=RuntimeError("pdf err")),
     ):
         with pytest.raises(GenerationError, match="Failed to generate PDF"):

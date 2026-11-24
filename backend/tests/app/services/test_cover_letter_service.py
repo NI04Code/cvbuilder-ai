@@ -72,6 +72,10 @@ async def test_generate_tailored_cover_letter_success_and_errors(mock_db, tmp_pa
             new=AsyncMock(return_value={"cover_letter": content}),
         ),
         patch(
+            "app.services.cover_letter_service.get_generated_document_path",
+            return_value=tmp_path / "cl_fail.pdf",
+        ),
+        patch(
             "app.services.cover_letter_service.generate_cover_letter_pdf",
             side_effect=RuntimeError("pdf err"),
         ),

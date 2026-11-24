@@ -2,6 +2,7 @@
 
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -331,6 +332,17 @@ def make_ats_check_result(**overrides: object) -> ATSCheckResult:
     }
     defaults.update(overrides)
     return ATSCheckResult(**defaults)
+
+
+@pytest.fixture(autouse=True)
+def _isolate_storage_dirs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ensure tests never create directories or files inside real uploads/ or generated/."""
+    uploads = tmp_path / "uploads"
+    generated = tmp_path / "generated"
+    uploads.mkdir(parents=True, exist_ok=True)
+    generated.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr("app.utils.file_handler.UPLOAD_DIR", uploads)
+    monkeypatch.setattr("app.utils.file_handler.GENERATED_DIR", generated)
 
 
 @pytest.fixture
