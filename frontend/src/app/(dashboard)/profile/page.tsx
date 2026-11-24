@@ -566,6 +566,14 @@ function ProfilePageContent() {
                         onChange={(val) => updateListItem("work_experiences", idx, "end_date", val)}
                       />
                     </div>
+                    <input
+                      className={styles.input}
+                      placeholder="Location (optional)"
+                      value={exp.location || ""}
+                      onChange={(e) =>
+                        updateListItem("work_experiences", idx, "location", e.target.value)
+                      }
+                    />
                     <textarea
                       className={styles.textarea}
                       placeholder="Key achievements and impact (each bullet seperated by Enter)"
@@ -584,7 +592,10 @@ function ProfilePageContent() {
                     <div className={styles.listItemHeader}>
                       <div>
                         <div className={styles.itemTitle}>{exp.title}</div>
-                        <div className={styles.itemSubtitle}>{exp.company}</div>
+                        <div className={styles.itemSubtitle}>
+                          {exp.company}
+                          {exp.location ? ` · ${exp.location}` : ""}
+                        </div>
                       </div>
                       <div className={styles.itemDate}>
                         {exp.start_date || ""} – {exp.end_date || "Present"}
